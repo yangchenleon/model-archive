@@ -32,13 +32,13 @@ docker compose exec api python -m app.scripts.export_csv /app/data/drafts/curren
 
 ## 导入
 
-导入时，系统会根据厂商、产品线、名称、版本、比例和厂商编号匹配发行物；数据库 UUID、外键和内部导入标识全部由系统处理。
+导入时，系统会根据完整目录身份匹配发行物；数据库 UUID、外键和内部导入标识全部由系统处理。资产不会自动创建目录，找不到目录时会报错。
 
 ```bash
 docker compose exec api python -m app.scripts.import_csv /app/data/drafts/current_snapshot_friendly
 ```
 
-资产目前以“同一发行物 + 同一存放位置”为一组匹配。两盒同款但状态不同或需要逐盒管理时，先分行；更精细的逐盒关联会在界面版中处理。
+临时导入器目前只安全处理“一个发行物对应一组资产”。同款多盒、位置变动或状态变动不要通过 CSV 更新；请先整理目录，等待界面版按卡片和复选框处理。完整边界见 [`importer-temporary-design.md`](importer-temporary-design.md)。
 
 ## 日报如何继续写
 

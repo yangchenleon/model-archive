@@ -1,4 +1,4 @@
-"""Import human-friendly Chinese CSV templates without exposing database identifiers."""
+"""Temporary strict importer for human-friendly Chinese CSV templates."""
 from __future__ import annotations
 import csv
 import json
@@ -20,10 +20,17 @@ EVENT = {"购入": "acquired", "开盒": "opened", "开始拼装": "build_starte
 def text(row: dict[str, str], field: str) -> str | None:
     value = (row.get(field) or "").strip()
     return value or None
-def mapped(row: dict[str, str], field: str, mapping: dict[str, str], default: str | None = None) -> str | None:
+def required_text(row: dict[str, str], field: str) -> str:
     value = text(row, field)
     if value is None:
-        return default
+        raise ValueError(f"missing required field: {field}")
+    return value
+def mapped(row: dict[str, str], field: str, mapping: dict[str, str], required: bool = False) -> str | None:
+    value = text(row, field)
+    if value is None:
+        if required:
+            raise ValueError(f"missing required field: {field}")
+        return None
     if value not in mapping:
         raise ValueError(f"{field} has an unsupported value: {value}")
     return mapping[value]
@@ -39,107 +46,90 @@ def read_csv(path: Path) -> list[dict[str, str]]:
                 rows.append({field: (value or "").strip() for field, value in row.items()})
         return rows
 def item_identity(row: dict[str, str]) -> dict[str, str | None]:
-    manufacturer = text(row, "厂商")
-    kit_name = text(row, "模型名称")
-    if not manufacturer or not kit_name:
-        raise ValueError("模型目录和资产清单都必须填写 厂商 与 模型名称")
-    return {"manufacturer": manufacturer, "origin_type": mapped(row, "来源类型", ORIGIN, "unknown"), "product_line": text(row, "产品线"), "scale": text(row, "比例"), "kit_name": kit_name, "variant_name": text(row, "版本/配色"), "manufacturer_code": text(row, "厂商编号")}
+    return {"manufacturer": required_text(row, "厂商"), "origin_type": mapped(row, "来源类型", ORIGIN, required=True), "product_line": text(row, "产品线"), "scale": text(row, "比例"), "kit_name": required_text(row, "模型名称"), "variant_name": text(row, "版本/配色"), "manufacturer_code": text(row, "厂商编号")}
 def find_item(session, identity: dict[str, str | None]) -> CatalogItem | None:
     statement = select(CatalogItem)
     for field, value in identity.items():
         column = getattr(CatalogItem, field)
         statement = statement.where(column.is_(None) if value is None else column == value)
-    item = session.scalar(statement)
-    if item or identity["origin_type"] != "unknown":
-        return item
-    fallback = select(CatalogItem)
-    for field, value in identity.items():
-        if field == "origin_type":
-            continue
-        column = getattr(CatalogItem, field)
-        fallback = fallback.where(column.is_(None) if value is None else column == value)
-    matches = list(session.scalars(fallback))
-    return matches[0] if len(matches) == 1 else None
-def item_from_row(session, row: dict[str, str]) -> CatalogItem:
+    return session.scalar(statement)
+def import_catalog_row(session, row: dict[str, str]) -> tuple[CatalogItem, bool]:
     identity = item_identity(row)
+    details = {"subject_name": text(row, "对应机体/原型"), "box_art_key": text(row, "盒绘标识"), "source_note": text(row, "来源备注"), "confidence": mapped(row, "资料可信度", CONFIDENCE, required=True)}
     item = find_item(session, identity)
-    details = {"subject_name": text(row, "对应机体/原型"), "box_art_key": text(row, "盒绘标识"), "source_note": text(row, "来源备注"), "confidence": mapped(row, "资料可信度", CONFIDENCE, "reported")}
     if item:
         for field, value in details.items():
-            if value is not None:
-                setattr(item, field, value)
-        return item
+            setattr(item, field, value)
+        return item, False
     item = CatalogItem(**identity, **details, catalog_key=f"catalog-{uuid4()}")
     session.add(item)
     session.flush()
+    return item, True
+def resolve_catalog(session, row: dict[str, str]) -> CatalogItem:
+    item = find_item(session, item_identity(row))
+    if not item:
+        raise ValueError("catalog item not found; import catalog_items.csv first or correct the identifying fields")
     return item
-def find_asset(session, item: CatalogItem, location: str | None) -> Asset | None:
-    statement = select(Asset).where(Asset.catalog_item_id == item.id)
-    statement = statement.where(Asset.storage_location.is_(None) if location is None else Asset.storage_location == location)
-    matches = list(session.scalars(statement))
-    if len(matches) <= 1:
-        return matches[0] if matches else None
-    raise ValueError(f"{item.kit_name} 在同一存放位置有多条资产；请等待界面版按复选框选择具体盒子")
+def only_asset_for_catalog(session, item: CatalogItem) -> Asset | None:
+    assets = list(session.scalars(select(Asset).where(Asset.catalog_item_id == item.id)))
+    if len(assets) > 1:
+        raise ValueError(f"{item.kit_name} has multiple asset records; temporary CSV import cannot choose one")
+    return assets[0] if assets else None
+def asset_values(row: dict[str, str]) -> dict:
+    quantity = int(required_text(row, "数量"))
+    if quantity < 1:
+        raise ValueError("数量 must be greater than zero")
+    acquired_on = text(row, "购入日期")
+    purchase_price = text(row, "购入价格")
+    return {"status": mapped(row, "当前状态", STATUS, required=True), "condition": mapped(row, "盒况", CONDITION, required=True), "quantity": quantity, "storage_location": text(row, "存放位置"), "acquired_on": date.fromisoformat(acquired_on) if acquired_on else None, "purchase_price": Decimal(purchase_price) if purchase_price else None, "notes": text(row, "备注")}
+def same_values(record: Asset, values: dict) -> bool:
+    return all(getattr(record, field) == value for field, value in values.items())
 def import_data(root: Path) -> dict[str, int]:
     rows = {name: read_csv(root / filename) for name, filename in FILES.items()}
     created = {"items": 0, "assets": 0, "collection_targets": 0, "events": 0}
     with SessionLocal.begin() as session:
         for row in rows["items"]:
-            identity = item_identity(row)
-            if not find_item(session, identity):
-                created["items"] += 1
-            item_from_row(session, row)
+            _, was_created = import_catalog_row(session, row)
+            created["items"] += was_created
         for row in rows["assets"]:
-            item = item_from_row(session, row)
-            location = text(row, "存放位置")
-            asset = find_asset(session, item, location)
-            status_value = mapped(row, "当前状态", STATUS)
-            if not status_value:
-                raise ValueError("资产清单必须填写 当前状态")
-            values = {"status": status_value, "condition": mapped(row, "盒况", CONDITION, "unknown"), "quantity": int(text(row, "数量") or "1"), "storage_location": location, "acquired_on": date.fromisoformat(text(row, "购入日期")) if text(row, "购入日期") else None, "purchase_price": Decimal(text(row, "购入价格")) if text(row, "购入价格") else None, "notes": text(row, "备注")}
-            if asset:
-                for field, value in values.items():
-                    if value is not None:
-                        setattr(asset, field, value)
-            else:
-                session.add(Asset(**values, catalog_item_id=item.id, asset_key=f"asset-{uuid4()}"))
-                created["assets"] += 1
-        for row in rows["targets"]:
-            collection_name = text(row, "收藏分组")
-            if not collection_name:
+            item = resolve_catalog(session, row)
+            values = asset_values(row)
+            existing = only_asset_for_catalog(session, item)
+            if existing:
+                if not same_values(existing, values):
+                    raise ValueError(f"{item.kit_name} already has an asset with different data; update it in the future UI, not through this temporary importer")
                 continue
-            item = item_from_row(session, row)
+            session.add(Asset(**values, catalog_item_id=item.id, asset_key=f"asset-{uuid4()}"))
+            created["assets"] += 1
+        for row in rows["targets"]:
+            collection_name = required_text(row, "收藏分组")
+            item = resolve_catalog(session, row)
+            values = {"decision": mapped(row, "收藏决定", DECISION, required=True), "priority": int(text(row, "优先级")) if text(row, "优先级") else None, "reason": text(row, "原因"), "rule_version": text(row, "规则版本")}
             target = session.scalar(select(CollectionTarget).where(CollectionTarget.collection_name == collection_name, CollectionTarget.catalog_item_id == item.id))
-            values = {"decision": mapped(row, "收藏决定", DECISION, "consider"), "priority": int(text(row, "优先级")) if text(row, "优先级") else None, "reason": text(row, "原因"), "rule_version": text(row, "规则版本")}
             if target:
-                for field, value in values.items():
-                    if value is not None:
-                        setattr(target, field, value)
-            else:
-                session.add(CollectionTarget(**values, collection_name=collection_name, catalog_item_id=item.id))
-                created["collection_targets"] += 1
+                if any(getattr(target, field) != value for field, value in values.items()):
+                    raise ValueError(f"collection target already exists with different data: {collection_name} / {item.kit_name}")
+                continue
+            session.add(CollectionTarget(**values, collection_name=collection_name, catalog_item_id=item.id))
+            created["collection_targets"] += 1
         for row in rows["events"]:
-            item = item_from_row(session, row)
-            asset = find_asset(session, item, text(row, "存放位置"))
+            item = resolve_catalog(session, row)
+            asset = only_asset_for_catalog(session, item)
             if not asset:
-                raise ValueError(f"{item.kit_name} 没有可关联资产；先填写资产清单或暂时留空事件表")
-            event_type = mapped(row, "事件", EVENT)
-            if not event_type:
-                raise ValueError("事件记录必须填写 事件")
+                raise ValueError(f"{item.kit_name} has no asset record; import the asset first")
+            occurred_at = datetime.fromisoformat(required_text(row, "日期"))
+            event_type = mapped(row, "事件", EVENT, required=True)
             note = text(row, "来源备注")
-            exists = session.scalar(select(AssetEvent).where(AssetEvent.asset_id == asset.id, AssetEvent.event_type == event_type, AssetEvent.source_note == note))
-            if not exists:
-                values = {"asset_id": asset.id, "event_type": event_type, "from_status": mapped(row, "变更前状态", STATUS), "to_status": mapped(row, "变更后状态", STATUS), "source_note": note, "metadata_json": json.loads(text(row, "附加信息") or "{}")}
-                occurred_at = text(row, "日期")
-                if occurred_at:
-                    values["occurred_at"] = datetime.fromisoformat(occurred_at)
-                session.add(AssetEvent(**values))
-                created["events"] += 1
+            exists = session.scalar(select(AssetEvent).where(AssetEvent.asset_id == asset.id, AssetEvent.event_type == event_type, AssetEvent.occurred_at == occurred_at, AssetEvent.source_note == note))
+            if exists:
+                continue
+            session.add(AssetEvent(asset_id=asset.id, event_type=event_type, occurred_at=occurred_at, from_status=mapped(row, "变更前状态", STATUS), to_status=mapped(row, "变更后状态", STATUS), source_note=note, metadata_json=json.loads(text(row, "附加信息") or "{}")))
+            created["events"] += 1
     return created
 def main(directory: str) -> None:
     created = import_data(Path(directory))
     print("import complete: " + ", ".join(f"{name}={count}" for name, count in created.items()))
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise SystemExit("usage: python -m app.scripts.import_csv /app/data/drafts/current_snapshot")
+        raise SystemExit("usage: python -m app.scripts.import_csv /app/data/drafts/current_snapshot_friendly")
     main(sys.argv[1])
