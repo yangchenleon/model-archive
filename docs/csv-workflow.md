@@ -1,45 +1,25 @@
-# 填写清单，而不是填写数据库
+# 产品目录填写流程
 
-复制 [`templates/csv`](../templates/csv) 到 Git 忽略目录 `data/drafts/<批次名>/`。四份文件可以直接用 Excel、WPS 或 Numbers 打开。你只填写看得懂的内容，**不要填写 ID、外键、key 或任何内部编号**。
+复制 [`templates/csv/products.csv`](../templates/csv/products.csv) 到 Git 忽略目录 `data/drafts/products.csv`，再用 Excel、WPS 或 Numbers 填写。
 
-## 先填哪两份
+当前只维护这一份文件。资产、愿望单、收藏分组和事件暂不填写，也不需要建立任何关联。
 
-第一轮只需填这两份：
+## 字段规则
 
-1. `catalog_items.csv`：一行是一个可区分的发行版本。不同盒绘、配色、限定或编号，只有在你认为值得分开收藏时才分行。
-2. `assets.csv`：一行是一组状态相同的实物。例如三盒都未拆、放同一位置，可填数量 `3`；只要状态或位置不同，就分行。
-
-`collection_targets.csv` 和 `asset_events.csv` 可以先只保留表头。收藏归属、系列关系和历史事件后续由界面中的选择器/复选框维护，不必现在建立连接。
-
-## 可选项的填写方式
-
-| 字段 | 建议 |
+| 字段 | 规则 |
 | --- | --- |
-| 来源类型 | `官方/正版`、`国模`、`KO/翻模`、`GK`、`第三方` 或 `待确认`。 |
-| 当前状态 | `想买`、`已预订`、`待拼`、`拼装中`、`已拼`、`待出售`、`待置换`、`已出售`、`已退货`、`待确认`。 |
-| 盒况 | `未拆`、`已拆`、`完整`、`缺件`、`待确认`。 |
-| 资料可信度 | `记录`、`已核验`、`待核验`。 |
+| 厂商 | 必填，自由文本。 |
+| 来源类型 | 必填：官方/正版、国模、KO/翻模、GK、第三方、待确认。 |
+| 模型名称 | 必填，先按盒名或常用名称记录。 |
+| 资料可信度 | 必填：记录、已核验、待核验。 |
+| 详情 | 自由说明。可写资料来源、日报日期、命名疑问、盒绘差异或待核验原因。 |
 
-没有把握时留空，或者写 `待确认`。不要为了整齐而猜正式名称、厂商或比例。
-
-## 导出当前清单
-
-数据库已经有内容时，先导出一份可继续编辑的无 ID 清单：
-
-```bash
-docker compose exec api python -m app.scripts.export_csv /app/data/drafts/current_snapshot_friendly
-```
+没有把握的来源类型和资料状态，请显式写 `待确认`、`待核验`；不要留空让系统猜。
 
 ## 导入
 
-导入时，系统会根据完整目录身份匹配发行物；数据库 UUID、外键和内部导入标识全部由系统处理。资产不会自动创建目录，找不到目录时会报错。
-
 ```bash
-docker compose exec api python -m app.scripts.import_csv /app/data/drafts/current_snapshot_friendly
+docker compose exec api python -m app.scripts.import_products_csv /app/data/drafts/products.csv
 ```
 
-临时导入器目前只安全处理“一个发行物对应一组资产”。同款多盒、位置变动或状态变动不要通过 CSV 更新；请先整理目录，等待界面版按卡片和复选框处理。完整边界见 [`importer-temporary-design.md`](importer-temporary-design.md)。
-
-## 日报如何继续写
-
-使用 [`templates/daily-log.md`](../templates/daily-log.md) 记录新入库、完成拼装、出售/置换和收藏理由。不要在日报重复维护全量清单；需要追溯时，在 CSV 的 `来源备注` 中写日报文件名或日期即可。
+日报仍使用 [`templates/daily-log.md`](../templates/daily-log.md) 记录当日想法和变动，但不再重复维护全量产品清单。
