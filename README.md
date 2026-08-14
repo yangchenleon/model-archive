@@ -11,8 +11,21 @@ docker compose up --build -d
 
 - API documentation: <http://localhost:18000/docs>
 - Database browser (Adminer): <http://localhost:18080>
+- Product archive frontend: <http://localhost:5173>
 
 Adminer connection details: system `PostgreSQL`, server `db`, and the database/user/password from `.env`.
+
+## Frontend
+
+The Vue frontend reads the product directory through `/api/v1/products`; product filters and the product detail panel therefore use live database data. Asset inventory, wish list, and activity pages are explicitly marked frontend mockups until those modules are designed.
+
+For frontend-only development:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ## Current model
 

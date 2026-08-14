@@ -35,5 +35,14 @@ services:
       - "127.0.0.1:${API_PORT:-18000}:8000"
     volumes:
       - ./imports:/app/imports
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_PROXY_TARGET: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
 volumes:
   postgres_data:
