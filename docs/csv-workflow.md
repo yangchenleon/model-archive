@@ -8,18 +8,17 @@
 
 | 字段 | 规则 |
 | --- | --- |
-| 厂商 | 必填，自由文本。 |
-| 来源类型 | 必填：官方/正版、国模、KO/翻模、GK、第三方、待确认。 |
+| 厂商 | 自由文本，可空。 |
+| 来源类型 | 自由文本，可空。 |
 | 模型名称 | 必填，先按盒名或常用名称记录。 |
-| 资料可信度 | 必填：记录、已核验、待核验。 |
-| 详情 | 自由说明。可写命名疑问、盒绘差异或待核验原因。 |
+| 版本/配色 | 可空。 |
 
-没有把握的来源类型和资料状态，请显式写 `待确认`、`待核验`；不要留空让系统猜。
+本批产品的 `detail` 留空，`source` 由导入命令统一写入，不需要出现在 CSV 中。
 
 ## 导入
 
 ```bash
-docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv
+docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv --source 初始化测试
 ```
 
 系统不保存或对接原始日报、网页或其他资料文件；它们不属于当前产品目录范围。

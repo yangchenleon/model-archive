@@ -10,21 +10,15 @@ from app.db import Base
 class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
-        CheckConstraint("origin_type IN ('official', 'china_brand', 'ko', 'gk', 'third_party', 'unknown')", name="ck_products_origin_type"),
-        CheckConstraint("confidence IN ('reported', 'verified', 'uncertain')", name="ck_products_confidence"),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    manufacturer: Mapped[str] = mapped_column(String(120))
-    origin_type: Mapped[str] = mapped_column(String(32))
+    manufacturer: Mapped[str | None] = mapped_column(String(120))
+    origin_type: Mapped[str | None] = mapped_column(String(120))
     product_line: Mapped[str | None] = mapped_column(String(120))
-    scale: Mapped[str | None] = mapped_column(String(32))
     kit_name: Mapped[str] = mapped_column(String(240))
     variant_name: Mapped[str | None] = mapped_column(String(240))
-    manufacturer_code: Mapped[str | None] = mapped_column(String(120))
-    subject_name: Mapped[str | None] = mapped_column(String(240), index=True)
-    box_art_key: Mapped[str | None] = mapped_column(String(240))
     detail: Mapped[str | None] = mapped_column(Text)
-    confidence: Mapped[str] = mapped_column(String(16), default="reported")
+    source: Mapped[str] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     assets: Mapped[list[Asset]] = relationship(back_populates="product")
 class Asset(Base):

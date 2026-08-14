@@ -14,20 +14,19 @@ products.csv
   -> products
 ```
 
-产品身份由以下字段共同组成：厂商、来源类型、产品线、比例、模型名称、版本/配色、厂商编号。空值也是身份的一部分。
+产品身份由以下字段共同组成：厂商、来源类型、产品线、模型名称、版本/配色。空值也是身份的一部分。
 
-必填字段：厂商、来源类型、模型名称、资料可信度。
+必填字段：模型名称。
 
-可选字段：产品线、比例、版本/配色、厂商编号、对应机体/原型、盒绘标识、详情。
+可选字段：厂商、来源类型、产品线、版本/配色。
 
 ## 明确拒绝的情况
 
 - CSV 列数不正确。
-- 必填字段为空。
-- 来源类型或资料可信度不在受控选项中。
+- 模型名称为空。
 - 日期、资产、事件、收藏分组等非产品字段出现在本导入流程中。
 
-导入器不创建资产、不创建愿望单、不猜测厂商/产品线、不把空值替换成默认业务值。
+导入器不创建资产、不创建愿望单；详情与编号不从本批 CSV 写入，资料来源必须通过命令参数显式指定。
 
 ## 已知边界
 
@@ -36,5 +35,5 @@ products.csv
 ## 用法
 
 ```bash
-docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv
+docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv --source 初始化测试
 ```

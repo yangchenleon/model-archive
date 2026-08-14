@@ -18,7 +18,7 @@ Adminer connection details: system `PostgreSQL`, server `db`, and the database/u
 
 | Table | Purpose |
 | --- | --- |
-| `products` | One distinguishable product release: maker, line, scale, version and detail. |
+| `products` | One distinguishable product release: maker, type, line, version, detail and source. |
 | `assets` | Reserved for future physical-inventory work; currently no user import flow. |
 | `asset_events` | Reserved for future asset history. |
 
@@ -27,7 +27,7 @@ Adminer connection details: system `PostgreSQL`, server `db`, and the database/u
 Follow [`docs/csv-workflow.md`](docs/csv-workflow.md), then run:
 
 ```bash
-docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv
+docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv --source 初始化测试
 ```
 
 ## Useful commands
