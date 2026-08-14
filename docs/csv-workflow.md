@@ -58,4 +58,4 @@ The directory must contain all four CSVs, even if some only have their header ro
 
 ## How to rewrite the diary
 
-Use a new diary entry for decisions and context, then link it in `source_note`; do not duplicate inventory lists. A useful entry has only: new arrivals, completed builds, changed collection decisions, and a short free-form note about why. The CSV files become the authoritative current state.
+Use [`templates/daily-log.md`](../templates/daily-log.md) for decisions and context, then link it in `source_note`; do not duplicate inventory lists. A useful entry has only: new arrivals, completed builds, changed collection decisions, and a short free-form note about why. The CSV files become the authoritative current state.
