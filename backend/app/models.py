@@ -13,6 +13,7 @@ class Product(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     manufacturer: Mapped[str | None] = mapped_column(String(120))
+    manufacturer_code: Mapped[str | None] = mapped_column(String(120))
     origin_type: Mapped[str | None] = mapped_column(String(120))
     product_line: Mapped[str | None] = mapped_column(String(120))
     kit_name: Mapped[str] = mapped_column(String(240))

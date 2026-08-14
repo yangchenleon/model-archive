@@ -26,7 +26,7 @@ products.csv
 - 模型名称为空。
 - 日期、资产、事件、收藏分组等非产品字段出现在本导入流程中。
 
-导入器不创建资产、不创建愿望单；详情与编号不从本批 CSV 写入，资料来源必须通过命令参数显式指定。
+导入器不创建资产、不创建愿望单。产品 CSV 可写入厂家编号、详情和资料来源；`--source` 仅作为旧测试 CSV 缺少资料来源列时的兼容回退。
 
 ## 已知边界
 
@@ -35,5 +35,5 @@ products.csv
 ## 用法
 
 ```bash
-docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv --source 初始化测试
+docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv
 ```

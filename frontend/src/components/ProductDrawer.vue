@@ -1,5 +1,5 @@
 <script setup>
-import { Building2, CalendarDays, Copy, ExternalLink, Tag, X } from 'lucide-vue-next'
+import { Barcode, Building2, CalendarDays, Copy, ExternalLink, Tag, X } from 'lucide-vue-next'
 
 defineProps({ product: { type: Object, default: null } })
 defineEmits(['close'])
@@ -27,6 +27,7 @@ function formatDate(value) {
         </section>
         <dl class="detail-grid">
           <div><dt><Building2 :size="15" />厂商</dt><dd>{{ product.manufacturer || '未填写' }}</dd></div>
+          <div><dt><Barcode :size="15" />厂家编号</dt><dd>{{ product.manufacturer_code || '未填写' }}</dd></div>
           <div><dt><Tag :size="15" />产品线</dt><dd>{{ product.product_line || '未填写' }}</dd></div>
           <div><dt><Copy :size="15" />资料来源</dt><dd>{{ product.source }}</dd></div>
           <div><dt><CalendarDays :size="15" />入库时间</dt><dd>{{ formatDate(product.created_at) }}</dd></div>

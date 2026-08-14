@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 class ProductCreate(BaseModel):
     manufacturer: str | None = None
+    manufacturer_code: str | None = None
     origin_type: str | None = None
     product_line: str | None = None
     kit_name: str
