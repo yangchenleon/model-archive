@@ -22,6 +22,8 @@ Personal data is ignored by Git. Put a seed JSON file in `data/seed/`, then run:
 docker compose exec api python -m app.scripts.import_seed /app/data/seed/initial_snapshot.json
 ```
 The importer is idempotent on `catalog_key` and `asset_key`. Its supported JSON format is defined by [`backend/app/scripts/import_seed.py`](backend/app/scripts/import_seed.py).
+
+For a human-editable workflow, use the four templates in [`templates/csv`](templates/csv) and follow [`docs/csv-workflow.md`](docs/csv-workflow.md). Import a filled directory with `python -m app.scripts.import_csv`.
 For the supplied diary, start from the explicit current snapshot sections (`万代资产`, `待定/收藏`, `回收`, `待置换`), not historical plans or strikethrough markers. Preserve those as source notes and backfill them later as events.
 ## Useful commands
 ```bash

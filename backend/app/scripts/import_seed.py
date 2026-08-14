@@ -20,8 +20,7 @@ def upsert(session, model, key_column, values):
 def load_json(path: Path) -> dict:
     with path.open(encoding="utf-8") as handle:
         return json.load(handle)
-def main(seed_path: str) -> None:
-    seed = load_json(Path(seed_path))
+def import_data(seed: dict) -> dict[str, int]:
     created = {"items": 0, "assets": 0, "collection_targets": 0, "events": 0}
     with SessionLocal.begin() as session:
         items: dict[str, CatalogItem] = {}
@@ -63,6 +62,9 @@ def main(seed_path: str) -> None:
             if not exists:
                 session.add(AssetEvent(**values, asset_id=asset.id))
                 created["events"] += 1
+    return created
+def main(seed_path: str) -> None:
+    created = import_data(load_json(Path(seed_path)))
     print("import complete: " + ", ".join(f"{name}={count}" for name, count in created.items()))
 if __name__ == "__main__":
     if len(sys.argv) != 2:
