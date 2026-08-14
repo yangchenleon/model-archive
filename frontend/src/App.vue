@@ -22,7 +22,7 @@ const productLines = computed(() => [...new Set(products.value.map((item) => ite
 const filteredProducts = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase()
   return products.value.filter((item) => {
-    const matchText = !keyword || [item.kit_name, item.manufacturer, item.manufacturer_code, item.product_line, item.variant_name].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
+    const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, item.product_line, item.variant_name].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
     return matchText && (!originFilter.value || item.origin_type === originFilter.value) && (!lineFilter.value || item.product_line === lineFilter.value)
   })
 })

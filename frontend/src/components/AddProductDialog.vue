@@ -8,7 +8,7 @@ const emit = defineEmits(['close', 'created'])
 const form = reactive({
   kit_name: '',
   manufacturer: '',
-  manufacturer_code: '',
+  product_code: '',
   origin_type: '',
   product_line: '',
   variant_name: '',
@@ -46,7 +46,7 @@ async function submit() {
         kit_name: form.kit_name.trim(),
         source: form.source.trim(),
         manufacturer: valueOrNull(form.manufacturer),
-        manufacturer_code: valueOrNull(form.manufacturer_code),
+        product_code: valueOrNull(form.product_code),
         origin_type: valueOrNull(form.origin_type),
         product_line: valueOrNull(form.product_line),
         variant_name: valueOrNull(form.variant_name),
@@ -55,7 +55,7 @@ async function submit() {
     })
     if (!response.ok) throw new Error('保存失败')
     const product = await response.json()
-    Object.assign(form, { kit_name: '', manufacturer: '', manufacturer_code: '', origin_type: '', product_line: '', variant_name: '', detail: '', source: '手动录入' })
+    Object.assign(form, { kit_name: '', manufacturer: '', product_code: '', origin_type: '', product_line: '', variant_name: '', detail: '', source: '手动录入' })
     emit('created', product)
     emit('close')
   } catch {
@@ -77,7 +77,7 @@ async function submit() {
         <div class="form-grid">
           <label class="form-field full"><span>产品名称 <b>*</b></span><input v-model="form.kit_name" required autofocus placeholder="例如：MG 1/100 RX-78-2 Ver.Ka" /></label>
           <label class="form-field"><span>厂商</span><input v-model="form.manufacturer" placeholder="万代 / 大班 ..." /></label>
-          <label class="form-field"><span>厂家编号</span><input v-model="form.manufacturer_code" placeholder="例如：5066543" /></label>
+          <label class="form-field"><span>产品编号</span><input v-model="form.product_code" placeholder="例如：MDH-12E / RG32" /></label>
           <label class="form-field"><span>产品线</span><input v-model="form.product_line" placeholder="MG / HG / RG ..." /></label>
           <label class="form-field"><span>来源类型</span><input v-model="form.origin_type" placeholder="正版 / 国模原创 / KO ..." /></label>
           <label class="form-field"><span>变体名称</span><input v-model="form.variant_name" placeholder="可留空" /></label>

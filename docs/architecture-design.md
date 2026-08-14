@@ -17,7 +17,7 @@
 | 字段 | 含义 |
 | --- | --- |
 | `id` | 内部 UUID 主键，不对用户暴露。 |
-| `manufacturer`、`manufacturer_code`、`origin_type`、`product_line` | 自由文本，可空。 |
+| `manufacturer`、`product_code`、`origin_type`、`product_line` | 自由文本，可空；`product_code` 是厂商给产品的市场编号。 |
 | `kit_name`、`variant_name` | 产品识别信息；模型名称必填。 |
 | `detail` | 自由补充说明，可空。 |
 | `source` | 资料来源；新 CSV 由人工填写，旧测试数据使用“初始化测试”。 |
