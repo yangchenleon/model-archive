@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-model_archive}
+      POSTGRES_USER: ${POSTGRES_USER:-model_archive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-model_archive_dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+  adminer:
+    image: adminer:4.8.1-standalone
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${ADMINER_PORT:-18080}:8080"
+  api:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-model_archive}:${POSTGRES_PASSWORD:-model_archive_dev}@db:5432/${POSTGRES_DB:-model_archive}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "127.0.0.1:${API_PORT:-18000}:8000"
+    volumes:
+      - ./data:/app/data
+volumes:
+  postgres_data:
