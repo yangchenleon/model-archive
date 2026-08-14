@@ -36,5 +36,5 @@ products.csv
 ## 用法
 
 ```bash
-docker compose exec api python -m app.scripts.import_products_csv /app/data/drafts/products.csv
+docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv
 ```

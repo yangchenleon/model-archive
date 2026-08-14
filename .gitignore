@@ -4,6 +4,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
-# Personal inventory, images, receipts, and source diaries remain local.
-data/*
-!data/.gitkeep
+# Local CSV files used for one-off imports are not versioned.
+imports/*
+!imports/.gitkeep

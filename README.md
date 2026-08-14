@@ -1,6 +1,6 @@
 # Model Archive
 
-个人拼装模型资料与资产系统。当前阶段只建设产品目录；资产、愿望单和事件功能暂缓。
+个人拼装模型产品目录系统。当前阶段只建设产品目录；资产、愿望单和事件功能暂缓。
 
 ## Start
 
@@ -27,7 +27,7 @@ Adminer connection details: system `PostgreSQL`, server `db`, and the database/u
 Follow [`docs/csv-workflow.md`](docs/csv-workflow.md), then run:
 
 ```bash
-docker compose exec api python -m app.scripts.import_products_csv /app/data/drafts/products.csv
+docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv
 ```
 
 ## Useful commands

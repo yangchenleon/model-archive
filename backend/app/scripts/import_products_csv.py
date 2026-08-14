@@ -58,6 +58,6 @@ def import_products(path: Path) -> tuple[int, int]:
     return created, updated
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise SystemExit("usage: python -m app.scripts.import_products_csv /app/data/drafts/products.csv")
+        raise SystemExit("usage: python -m app.scripts.import_products_csv /app/imports/products.csv")
     created, updated = import_products(Path(sys.argv[1]))
     print(f"import complete: created={created}, updated={updated}")
