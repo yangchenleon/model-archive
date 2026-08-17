@@ -43,6 +43,13 @@ Follow [`docs/csv-workflow.md`](docs/csv-workflow.md), then run:
 docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv --source 初始化测试
 ```
 
+## Source ingestion
+
+The composable video-to-CSV pipeline lives in [`tools/README.md`](tools/README.md).
+It downloads a Bilibili source, extracts audio, runs ASR, and asks an optional
+OpenAI-compatible LLM to produce the same CSV columns used by the importer.
+Generated CSV files should be reviewed before copying them to `imports/`.
+
 ## Useful commands
 
 ```bash
