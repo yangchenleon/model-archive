@@ -45,10 +45,44 @@ transcripts; only reviewed CSV files should be copied to `imports/`.
 
 ASR can only recover spoken content. Some review videos are image slideshows
 with little or no narration; their transcript may be too short to identify
-products, and the product extractor correctly returns no rows. Handling those
-videos requires a separate visual pipeline (frame sampling, OCR and/or a
-vision-language model) and is intentionally outside this speech pipeline.
-Do not treat an empty CSV as valid product data.
+products, and the product extractor correctly returns no rows. Use the visual
+pipeline to create a compact, reviewable collection of the distinct slides:
+
+```text
+download_bilibili (optional) -> extract_screenshots
+```
+
+`extract_screenshots` samples once per second by default and compares each
+sample to the preceding second. The comparison uses the 15%-75% vertical band,
+so bottom subtitles and player overlays do not cause duplicate captures. It
+saves the first frame and every subsequent frame whose normalized mean pixel
+difference is at least `0.08`; full, uncropped JPEGs go in `screenshots/frames`
+and `screenshots/manifest.json` records timestamps and difference scores.
+
+To test a video that has already been downloaded, provide `--media` and the
+pipeline will skip yt-dlp entirely:
+
+```bash
+.venv-tools/bin/python -m tools.screenshot_pipeline \
+  --media outputs/season-4951163/videos/BV1zoZiYXEXw/video/BV1zoZiYXEXw.mp4 \
+  --work-dir outputs/season-4951163/videos/BV1zoZiYXEXw
+```
+
+For an already downloaded season, process every local video with a durable
+summary under `batch/screenshot-summary.json`. Existing manifests are skipped;
+add `--force` to regenerate them:
+
+```bash
+.venv-tools/bin/python -m tools.batch_screenshot_pipeline \
+  --work-dir outputs/season-4951163
+```
+
+Tune `--threshold` upward to retain fewer, more different slides, or downward
+to retain small changes. `--interval`, `--crop-top`, and `--crop-bottom` are
+available when a source's timing or subtitle position differs. The screenshots
+are visual source artifacts, not CSV rows; OCR or a vision-language stage can
+consume the selected frames afterward. Do not treat an empty CSV as valid
+product data.
 
 ## Artifact layout
 
@@ -58,6 +92,7 @@ outputs/<batch>/
   videos/<BV ID>/audio/       normalized WAV
   videos/<BV ID>/transcript/  transcript JSON and joined TXT
   videos/<BV ID>/csv/         title-named product CSV
+  videos/<BV ID>/screenshots/ distinct full-frame JPEGs and manifest JSON
   batch/summary.json          batch status and warnings
 ```
 
