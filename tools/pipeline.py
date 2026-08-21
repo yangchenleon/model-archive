@@ -8,9 +8,12 @@ import re
 from pathlib import Path
 
 from tools.download_bilibili import download
+from tools.config import load_env
 from tools.extract_audio import extract
 from tools.extract_products import extract_with_openai, fallback, write_csv
 from tools.transcribe import transcribe
+
+load_env()
 
 
 def safe_filename(value: str | None, fallback: str) -> str:

@@ -13,6 +13,10 @@ import wave
 from pathlib import Path
 from typing import Any
 
+from tools.config import load_env
+
+load_env()
+
 
 def transcribe_local(audio: Path, model_name: str, language: str | None) -> dict[str, Any]:
     try:

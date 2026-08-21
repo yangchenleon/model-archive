@@ -7,7 +7,10 @@ import os
 from pathlib import Path
 
 from tools.list_bilibili import list_videos
+from tools.config import load_env
 from tools.pipeline import run
+
+load_env()
 
 
 def _replace_position(rows: list[dict], position: int, value: dict) -> list[dict]:

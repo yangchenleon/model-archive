@@ -10,6 +10,10 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from tools.config import load_env
+
+load_env()
+
 CSV_FIELDS = ["厂商", "产品编号", "来源类型", "产品线", "模型名称", "版本/配色", "详情", "资料来源"]
 
 

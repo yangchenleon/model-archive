@@ -118,6 +118,19 @@ python3 -m venv .venv-tools
 .venv-tools/bin/pip install -r tools/requirements.txt
 ```
 
+Provider keys and model defaults are loaded automatically from the repository
+root `.env` by `tools.config`; shell environment variables take precedence.
+Start from `.env.example`, then inspect the active non-secret settings with:
+
+```bash
+.venv-tools/bin/python -m tools.config
+```
+
+The tool-specific settings are `ASR_API_KEY`/`ASR_BASE_URL` for compatible
+chat ASR, `LLM_API_KEY`/`LLM_BASE_URL` for product extraction, and the model
+variables `COMPATIBLE_ASR_MODEL`, `WHISPER_MODEL`, and `LLM_MODEL`. The actual
+key values are never printed by the diagnostic command; keep `.env` private.
+
 Run the supplied Bilibili example without external LLM credentials (the final
 CSV is a reviewable, metadata-only row):
 
