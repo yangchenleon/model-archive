@@ -13,6 +13,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
+USER_ENV_FILE = Path.home() / ".config" / "model-archive" / "ingest.env"
 _KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
@@ -25,11 +26,9 @@ def _value(raw: str) -> str:
     return re.sub(r"\s+#.*$", "", value).strip()
 
 
-def load_env(path: Path | None = None, *, override: bool = False) -> Path | None:
-    """Load simple dotenv assignments and return the file used, if any."""
-    env_path = (path or ENV_FILE).expanduser()
+def _load_file(env_path: Path, *, override: bool) -> bool:
     if not env_path.is_file():
-        return None
+        return False
     for line_number, line in enumerate(env_path.read_text(encoding="utf-8").splitlines(), start=1):
         line = line.strip()
         if not line or line.startswith("#"):
@@ -44,7 +43,19 @@ def load_env(path: Path | None = None, *, override: bool = False) -> Path | None
             raise ValueError(f"Invalid environment key {key!r} at {env_path}:{line_number}")
         if override or key not in os.environ:
             os.environ[key] = _value(raw)
-    return env_path
+    return True
+
+
+def load_env(path: Path | None = None, *, override: bool = False) -> Path | None:
+    """Load a requested dotenv file, or secure user settings then project settings."""
+    if path is not None:
+        env_path = path.expanduser()
+        return env_path if _load_file(env_path, override=override) else None
+    found = None
+    for env_path in (USER_ENV_FILE, ENV_FILE):
+        if _load_file(env_path, override=override):
+            found = env_path
+    return found
 
 
 def active_provider_config() -> dict[str, str | bool | None]:
@@ -52,10 +63,10 @@ def active_provider_config() -> dict[str, str | bool | None]:
     load_env()
     return {
         "env_file": str(ENV_FILE) if ENV_FILE.is_file() else None,
-        "asr_provider": os.getenv("ASR_PROVIDER", "local"),
-        "asr_model": os.getenv("COMPATIBLE_ASR_MODEL") or os.getenv("WHISPER_MODEL", "small"),
+        "credential_file": str(USER_ENV_FILE) if USER_ENV_FILE.is_file() else None,
+        "asr_model": os.getenv("ASR_MODEL", "qwen3-asr-flash"),
         "asr_base_url_configured": bool(os.getenv("ASR_BASE_URL")),
-        "asr_api_key_configured": bool(os.getenv("ASR_API_KEY") or os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")),
+        "asr_api_key_configured": bool(os.getenv("ASR_API_KEY")),
         "llm_provider": os.getenv("LLM_PROVIDER", "openai"),
         "llm_model": os.getenv("LLM_MODEL", "Qwen3.5-35B-A3B"),
         "llm_base_url_configured": bool(os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL")),

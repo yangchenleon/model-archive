@@ -1,4 +1,4 @@
-"""Convert downloaded media to a Whisper-friendly mono WAV file."""
+"""Convert downloaded media to a Qwen ASR-friendly mono WAV file."""
 from __future__ import annotations
 
 import argparse

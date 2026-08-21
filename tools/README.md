@@ -23,10 +23,9 @@ one unavailable or rate-limited video does not discard the rest of the batch.
 
 `download_bilibili` uses yt-dlp for the extractor and persists the original
 metadata. `extract_audio` uses ffmpeg to merge/normalize media into mono 16 kHz
-WAV. `transcribe` supports local faster-whisper, OpenAI-style multipart ASR,
-and the tested DashScope-compatible Qwen `input_audio` chat API. The compatible
-provider sends WAV data as a Base64 data URI and splits it into 60-second
-requests to stay below request-size limits.
+WAV. `transcribe` sends it to the configured Qwen `input_audio` chat API as a
+Base64 data URI, splitting it into 60-second requests to stay below
+request-size limits.
 
 `extract_products` sends only useful metadata (title, uploader, description,
 and source URL) plus the joined transcript; it deliberately excludes yt-dlp's
@@ -103,8 +102,7 @@ the joined ASR text is saved as `transcript/<title>.txt`:
 ```bash
 .venv-tools/bin/python -m tools.batch_pipeline \
   'https://space.bilibili.com/28175471/lists/4951163?type=season' \
-  --work-dir artifacts/season-4951163 \
-  --asr-provider compatible-chat
+  --work-dir artifacts/season-4951163
 ```
 
 Progress and failures are written to `batch/summary.json`. Resume a subset
@@ -120,16 +118,20 @@ python3 -m venv .venv-tools
 
 Provider keys and model defaults are loaded automatically from the repository
 root `.env` by `tools.config`; shell environment variables take precedence.
-Start from `.env.example`, then inspect the active non-secret settings with:
+On WSL, credentials are also automatically loaded from the user-only file
+`~/.config/model-archive/ingest.env`, before the project `.env`. This keeps
+keys off a Windows-mounted project directory, which cannot enforce Unix file
+permissions. Start from `.env.example`, then inspect the active non-secret
+settings with:
 
 ```bash
 .venv-tools/bin/python -m tools.config
 ```
 
-The tool-specific settings are `ASR_API_KEY`/`ASR_BASE_URL` for compatible
-chat ASR, `LLM_API_KEY`/`LLM_BASE_URL` for product extraction, and the model
-variables `COMPATIBLE_ASR_MODEL`, `WHISPER_MODEL`, and `LLM_MODEL`. The actual
-key values are never printed by the diagnostic command; keep `.env` private.
+The tool-specific settings are `ASR_API_KEY`/`ASR_BASE_URL` for Qwen ASR,
+`LLM_API_KEY`/`LLM_BASE_URL` for product extraction, and the model variables
+`ASR_MODEL` and `LLM_MODEL`. The actual key values are never printed by the
+diagnostic command; keep `.env` private.
 
 Run the supplied Bilibili example without external LLM credentials (the final
 CSV is a reviewable, metadata-only row):
@@ -139,12 +141,6 @@ CSV is a reviewable, metadata-only row):
   --work-dir artifacts/bv1bJXSYZE3z --llm-provider none
 ```
 
-For local ASR, `faster-whisper` downloads the selected model on first use. The
-default is `small`; use `--asr-model medium` or `large-v3` when accuracy matters.
-For a hosted ASR/LLM, set the corresponding API key and use
-`--asr-provider openai` and the default `--llm-provider openai`; the hosted ASR
-falls back to `whisper-1` unless `--asr-model` is an API transcription model
-name. `ASR_BASE_URL` and `LLM_BASE_URL` can point at OpenAI-compatible gateways.
 Login-only Bilibili videos can use `--cookies` with a Netscape-format cookie
 export.
 
@@ -156,12 +152,12 @@ export ASR_BASE_URL='https://llm-.../compatible-mode/v1'
 export LLM_API_KEY='...'
 export LLM_BASE_URL='http://api.chinalco.com.cn/aimiddle/v1'
 export LLM_MAX_TOKENS=4096
-.venv-tools/bin/python -m tools.pipeline VIDEO_URL --asr-provider compatible-chat
+.venv-tools/bin/python -m tools.pipeline VIDEO_URL
 ```
 
 This provider sends `data:audio/wav;base64,...` in `input_audio.data` and
 automatically splits WAV input into 60-second requests. It defaults to
-`qwen3-asr-flash`; override it with `--asr-model` or `COMPATIBLE_ASR_MODEL`.
+`qwen3-asr-flash`; override it with `--asr-model` or `ASR_MODEL`.
 
 Each stage is independently runnable and writes stable artifacts under the
 work directory. The CSV has the exact columns from

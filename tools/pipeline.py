@@ -23,11 +23,11 @@ def safe_filename(value: str | None, fallback: str) -> str:
     return (name or fallback)[:180]
 
 
-def run(url: str, work_dir: Path, asr_provider: str, asr_model: str, llm_provider: str, llm_model: str, language: str | None, cookies: Path | None) -> dict[str, str]:
+def run(url: str, work_dir: Path, asr_model: str, llm_provider: str, llm_model: str, language: str | None, cookies: Path | None) -> dict[str, str]:
     video_dir = work_dir / "video"
     media = download(url, video_dir, cookies)
     audio_path = extract(Path(media["media"]), work_dir / "audio" / f"{media['video_id']}.wav")
-    transcript = transcribe(audio_path, asr_provider, asr_model, language)
+    transcript = transcribe(audio_path, asr_model, language)
     transcript_path = work_dir / "transcript" / f"{media['video_id']}.json"
     transcript_path.parent.mkdir(parents=True, exist_ok=True)
     transcript_path.write_text(json.dumps(transcript, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -45,14 +45,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("url")
     parser.add_argument("--work-dir", type=Path, default=Path("artifacts"))
-    parser.add_argument("--asr-provider", choices=("local", "openai", "compatible-chat"), default=os.getenv("ASR_PROVIDER", "local"))
-    parser.add_argument("--asr-model", default=os.getenv("WHISPER_MODEL", "small"))
+    parser.add_argument("--asr-model", default=os.getenv("ASR_MODEL", "qwen3-asr-flash"))
     parser.add_argument("--llm-provider", choices=("openai", "none"), default=os.getenv("LLM_PROVIDER", "openai"))
     parser.add_argument("--llm-model", default=os.getenv("LLM_MODEL", "Qwen3.5-35B-A3B"))
     parser.add_argument("--language", default=os.getenv("ASR_LANGUAGE", "zh"))
     parser.add_argument("--cookies", type=Path)
     args = parser.parse_args()
-    print(json.dumps(run(args.url, args.work_dir, args.asr_provider, args.asr_model, args.llm_provider, args.llm_model, args.language, args.cookies), ensure_ascii=False, indent=2))
+    print(json.dumps(run(args.url, args.work_dir, args.asr_model, args.llm_provider, args.llm_model, args.language, args.cookies), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

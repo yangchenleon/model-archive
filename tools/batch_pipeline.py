@@ -17,7 +17,7 @@ def _replace_position(rows: list[dict], position: int, value: dict) -> list[dict
     return [row for row in rows if row.get("position") != position] + [value]
 
 
-def run_batch(url: str, work_dir: Path, asr_provider: str, asr_model: str, llm_provider: str, llm_model: str, language: str | None, cookies: Path | None, start: int = 1, limit: int | None = None, retry: bool = False) -> dict:
+def run_batch(url: str, work_dir: Path, asr_model: str, llm_provider: str, llm_model: str, language: str | None, cookies: Path | None, start: int = 1, limit: int | None = None, retry: bool = False) -> dict:
     entries = list_videos(url, cookies)
     summary_path = work_dir / "batch" / "summary.json"
     existing = json.loads(summary_path.read_text(encoding="utf-8")) if retry and summary_path.exists() else None
@@ -36,7 +36,7 @@ def run_batch(url: str, work_dir: Path, asr_provider: str, asr_model: str, llm_p
     for position, entry in zip(target_positions, selected):
         video_dir = work_dir / "videos" / entry["video_id"]
         try:
-            result = run(entry["url"], video_dir, asr_provider, asr_model, llm_provider, llm_model, language, cookies)
+            result = run(entry["url"], video_dir, asr_model, llm_provider, llm_model, language, cookies)
             summary["completed"] = _replace_position(summary["completed"], position, {"position": position, **result})
             summary["failed"] = [row for row in summary["failed"] if row.get("position") != position]
         except Exception as exc:  # Keep the batch moving; the summary is the retry queue.
@@ -52,8 +52,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("url")
     parser.add_argument("--work-dir", type=Path, default=Path("artifacts"))
-    parser.add_argument("--asr-provider", choices=("local", "openai", "compatible-chat"), default=os.getenv("ASR_PROVIDER", "local"))
-    parser.add_argument("--asr-model", default=os.getenv("WHISPER_MODEL", "small"))
+    parser.add_argument("--asr-model", default=os.getenv("ASR_MODEL", "qwen3-asr-flash"))
     parser.add_argument("--llm-provider", choices=("openai", "none"), default=os.getenv("LLM_PROVIDER", "openai"))
     parser.add_argument("--llm-model", default=os.getenv("LLM_MODEL", "Qwen3.5-35B-A3B"))
     parser.add_argument("--language", default=os.getenv("ASR_LANGUAGE", "zh"))
@@ -62,7 +61,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, help="Only process this many entries")
     parser.add_argument("--retry", action="store_true", help="Retry failed and pending entries in the --start..end range")
     args = parser.parse_args()
-    summary = run_batch(args.url, args.work_dir, args.asr_provider, args.asr_model, args.llm_provider, args.llm_model, args.language, args.cookies, args.start, args.limit, args.retry)
+    summary = run_batch(args.url, args.work_dir, args.asr_model, args.llm_provider, args.llm_model, args.language, args.cookies, args.start, args.limit, args.retry)
     print(json.dumps({"total": summary["total"], "completed": len(summary["completed"]), "failed": len(summary["failed"]), "summary": str(args.work_dir / "batch" / "summary.json")}, ensure_ascii=False, indent=2))
 
 
