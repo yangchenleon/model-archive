@@ -8,10 +8,10 @@ class ProductCreate(BaseModel):
     origin_type: str | None = None
     product_line: str | None = None
     kit_name: str
-    variant_name: str | None = None
     detail: str | None = None
     source: str
 class ProductRead(ProductCreate):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     created_at: datetime
+    updated_at: datetime | None = None

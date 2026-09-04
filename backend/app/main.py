@@ -17,8 +17,8 @@ def create_product(payload: ProductCreate, session: Session = Depends(get_sessio
     session.refresh(product)
     return product
 @app.get("/api/v1/products", response_model=list[ProductRead])
-def list_products(search: str | None = None, limit: int = Query(default=100, le=500), session: Session = Depends(get_session)) -> list[Product]:
-    statement = select(Product).order_by(Product.kit_name).limit(limit)
+def list_products(search: str | None = None, limit: int = Query(default=100, le=2000), session: Session = Depends(get_session)) -> list[Product]:
+    statement = select(Product).order_by(Product.manufacturer.nulls_last(), Product.product_line.nulls_last(), Product.product_code.nulls_last(), Product.kit_name).limit(limit)
     if search:
         statement = statement.where(Product.kit_name.ilike(f"%{search}%"))
     return list(session.scalars(statement))

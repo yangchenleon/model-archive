@@ -17,10 +17,10 @@ class Product(Base):
     origin_type: Mapped[str | None] = mapped_column(String(120))
     product_line: Mapped[str | None] = mapped_column(String(120))
     kit_name: Mapped[str] = mapped_column(String(240))
-    variant_name: Mapped[str | None] = mapped_column(String(240))
     detail: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     assets: Mapped[list[Asset]] = relationship(back_populates="product")
 class Asset(Base):
     __tablename__ = "assets"

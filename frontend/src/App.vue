@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { Filter, Grid2X2, List, LoaderCircle, Plus, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Building2, Filter, Grid2X2, List, LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-vue-next'
 import SidebarNav from './components/SidebarNav.vue'
 import ProductCard from './components/ProductCard.vue'
 import ProductDrawer from './components/ProductDrawer.vue'
@@ -11,27 +11,77 @@ const products = ref([])
 const loading = ref(true)
 const loadError = ref('')
 const search = ref('')
-const originFilter = ref('')
 const lineFilter = ref('')
+const makerFilter = ref('')
 const view = ref('grid')
 const selectedProduct = ref(null)
 const addDialogOpen = ref(false)
 
+const makers = computed(() => [...new Set(products.value.map((item) => item.manufacturer).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN')))
 const origins = computed(() => [...new Set(products.value.map((item) => item.origin_type).filter(Boolean))].sort())
-const productLines = computed(() => [...new Set(products.value.map((item) => item.product_line).filter(Boolean))].sort())
+
+// 厂商选定后，产品线栏仅可选厂商所存在的产品线，而非全局
+const productLines = computed(() => {
+  const sourceList = makerFilter.value
+    ? products.value.filter((item) => item.manufacturer === makerFilter.value)
+    : products.value
+  return [...new Set(sourceList.map((item) => item.product_line).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+})
+
+// 如果先选产品线，再选厂商的话，则产品恢复全局筛选（清空已选产品线）
+watch(makerFilter, () => {
+  lineFilter.value = ''
+})
+
 const filteredProducts = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase()
-  return products.value.filter((item) => {
-    const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, item.product_line, item.variant_name].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
-    return matchText && (!originFilter.value || item.origin_type === originFilter.value) && (!lineFilter.value || item.product_line === lineFilter.value)
-  })
+  return products.value
+    .filter((item) => {
+      const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, item.product_line].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
+      return matchText && (!makerFilter.value || item.manufacturer === makerFilter.value) && (!lineFilter.value || item.product_line === lineFilter.value)
+    })
+    .slice()
+    .sort((a, b) => {
+      // 1. 按照厂商排序
+      const makerA = a.manufacturer || ''
+      const makerB = b.manufacturer || ''
+      if (makerA !== makerB) {
+        if (!makerA) return 1
+        if (!makerB) return -1
+        const makerDiff = makerA.localeCompare(makerB, 'zh-CN')
+        if (makerDiff !== 0) return makerDiff
+      }
+
+      // 2. 按照产品线排序
+      const lineA = a.product_line || ''
+      const lineB = b.product_line || ''
+      if (lineA !== lineB) {
+        if (!lineA) return 1
+        if (!lineB) return -1
+        const lineDiff = lineA.localeCompare(lineB, 'zh-CN')
+        if (lineDiff !== 0) return lineDiff
+      }
+
+      // 3. 按照编号自然数字排序
+      const codeA = a.product_code || ''
+      const codeB = b.product_code || ''
+      if (codeA !== codeB) {
+        if (!codeA) return 1
+        if (!codeB) return -1
+        const codeDiff = codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' })
+        if (codeDiff !== 0) return codeDiff
+      }
+
+      // 4. 名称排序兜底
+      return (a.kit_name || '').localeCompare(b.kit_name || '', 'zh-CN')
+    })
 })
 
 async function loadProducts() {
   loading.value = true
   loadError.value = ''
   try {
-    const response = await fetch('/api/v1/products?limit=500')
+    const response = await fetch('/api/v1/products?limit=2000')
     if (!response.ok) throw new Error('产品目录请求失败')
     products.value = await response.json()
   } catch {
@@ -43,7 +93,7 @@ async function loadProducts() {
 
 function resetFilters() {
   search.value = ''
-  originFilter.value = ''
+  makerFilter.value = ''
   lineFilter.value = ''
 }
 
@@ -75,9 +125,9 @@ onMounted(loadProducts)
 
         <section class="toolbar" aria-label="产品筛选">
           <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索产品名、厂商或产品线" /></label>
+          <label class="select-field"><Building2 :size="16" /><select v-model="makerFilter"><option value="">所有厂商</option><option v-for="maker in makers" :key="maker" :value="maker">{{ maker }}</option></select></label>
           <label class="select-field"><Filter :size="16" /><select v-model="lineFilter"><option value="">所有产品线</option><option v-for="line in productLines" :key="line" :value="line">{{ line }}</option></select></label>
-          <label class="select-field"><SlidersHorizontal :size="16" /><select v-model="originFilter"><option value="">所有来源类型</option><option v-for="origin in origins" :key="origin" :value="origin">{{ origin }}</option></select></label>
-          <button v-if="search || lineFilter || originFilter" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
+          <button v-if="search || makerFilter || lineFilter" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
           <span class="result-count">{{ filteredProducts.length }} 项</span>
           <div class="view-switch" aria-label="视图方式"><button :class="{ selected: view === 'grid' }" type="button" aria-label="网格视图" title="网格视图" @click="view = 'grid'"><Grid2X2 :size="17" /></button><button :class="{ selected: view === 'list' }" type="button" aria-label="列表视图" title="列表视图" @click="view = 'list'"><List :size="18" /></button></div>
         </section>

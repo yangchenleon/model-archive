@@ -23,7 +23,6 @@ function shortName(name) {
         <h3>{{ product.kit_name }}</h3>
         <span v-if="product.origin_type" class="origin-tag">{{ product.origin_type }}</span>
       </div>
-      <p v-if="product.variant_name" class="variant">{{ product.variant_name }}</p>
       <div class="meta-row">
         <span v-if="product.manufacturer"><Building2 :size="14" />{{ product.manufacturer }}</span>
         <span v-if="product.product_line"><Tag :size="14" />{{ product.product_line }}</span>

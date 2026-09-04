@@ -21,7 +21,6 @@ function formatDate(value) {
         <section class="drawer-title">
           <div>
             <h2>{{ product.kit_name }}</h2>
-            <p>{{ product.variant_name || '未记录变体名称' }}</p>
           </div>
           <span v-if="product.origin_type" class="origin-tag">{{ product.origin_type }}</span>
         </section>

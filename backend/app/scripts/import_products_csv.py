@@ -6,7 +6,7 @@ from pathlib import Path
 from sqlalchemy import select
 from app.db import SessionLocal
 from app.models import Product
-IDENTITY_FIELDS = ("manufacturer", "product_code", "origin_type", "product_line", "kit_name", "variant_name")
+IDENTITY_FIELDS = ("manufacturer", "product_code", "origin_type", "product_line", "kit_name")
 def text(row: dict[str, str], field: str) -> str | None:
     value = (row.get(field) or "").strip()
     return value or None
@@ -16,7 +16,11 @@ def required_text(row: dict[str, str], field: str) -> str:
         raise ValueError(f"missing required field: {field}")
     return value
 def identity(row: dict[str, str]) -> dict[str, str | None]:
-    return {"manufacturer": text(row, "厂商"), "product_code": text(row, "产品编号"), "origin_type": text(row, "来源类型"), "product_line": text(row, "产品线"), "kit_name": required_text(row, "模型名称"), "variant_name": text(row, "版本/配色")}
+    kit_name = required_text(row, "模型名称")
+    variant = text(row, "版本/配色")
+    if variant and variant not in ("无", "未指定", "未知", "默认") and variant not in kit_name:
+        kit_name = f"{kit_name}（{variant}）"
+    return {"manufacturer": text(row, "厂商"), "product_code": text(row, "产品编号"), "origin_type": text(row, "来源类型"), "product_line": text(row, "产品线"), "kit_name": kit_name}
 def find_product(session, values: dict[str, str | None]) -> Product | None:
     statement = select(Product)
     for field in IDENTITY_FIELDS:
