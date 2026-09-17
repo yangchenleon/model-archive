@@ -97,7 +97,7 @@ def fetch_video_detail(bvid: str) -> dict[str, Any]:
 def fetch_space_videos(
     space_url: str = "https://space.bilibili.com/290901588/upload/video",
     max_items: int = 30,
-    page_size: int = 25,
+    page_size: int = 30,
 ) -> list[dict[str, Any]]:
     """Fetch recent chronological videos from UP space with pagination and metadata."""
     url = normalize_space_url(space_url)
@@ -108,12 +108,13 @@ def fetch_space_videos(
 
     while len(bvids) < max_items:
         if current_start > 1:
-            time.sleep(1.5)
+            time.sleep(2.5)
         current_end = current_start + page_size - 1
         cmd = _yt_dlp() + [
             "--flat-playlist",
             "--dump-single-json",
             "--skip-download",
+            "--sleep-requests", "2.5",
             "--playlist-start", str(current_start),
             "--playlist-end", str(current_end),
             "--cookies", str(cookie_file),
