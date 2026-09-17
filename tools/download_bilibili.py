@@ -43,7 +43,14 @@ def download(url: str, output_dir: Path, cookies_file: Path | None = None) -> di
             "ffmpeg is required to merge Bilibili video/audio streams. "
             "Install ffmpeg before running the pipeline."
         )
-    common = _yt_dlp() + ["--no-playlist", "--newline"]
+    common = _yt_dlp() + [
+        "--no-playlist",
+        "--newline",
+        "--user-agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "--referer",
+        "https://www.bilibili.com",
+    ]
     if cookies_file:
         common += ["--cookies", str(cookies_file)]
 

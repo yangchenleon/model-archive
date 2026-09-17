@@ -13,3 +13,4 @@ imports/*
 backups/
 ocr-results/
 ocr-results-useocr/
+*.egg-info/

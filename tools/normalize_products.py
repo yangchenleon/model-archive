@@ -172,14 +172,32 @@ def should_split(value: str) -> bool:
 
 
 def split_versions(value: str):
-    """按分隔符拆分版本/配色枚举；顿号/逗号优先，否则斜杠。"""
-    if any(sep in value for sep in "、，,"):
-        parts = re.split(r"[、，,]", value)
-    elif "/" in value:
-        parts = value.split("/")
-    else:
+    """按分隔符拆分版本/配色枚举；顿号/逗号优先，否则斜杠。保护全角/半角括号内逗号不被拆分。"""
+    if not any(sep in value for sep in "、，,/") and "/" not in value:
         return [value]
-    parts = [p.strip() for p in parts if p.strip()]
+    has_comma = any(sep in value for sep in "、，,")
+    seps = set("、，,") if has_comma else set("/")
+    parts = []
+    current = []
+    depth = 0
+    for ch in value:
+        if ch in "（(":
+            depth += 1
+            current.append(ch)
+        elif ch in "）)":
+            if depth > 0:
+                depth -= 1
+            current.append(ch)
+        elif depth == 0 and ch in seps:
+            part = "".join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+        else:
+            current.append(ch)
+    part = "".join(current).strip()
+    if part:
+        parts.append(part)
     return parts or [value]
 
 
