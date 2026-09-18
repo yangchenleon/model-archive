@@ -97,7 +97,7 @@ def run_batch(
     log_message("🤖 7月/8月 模玩日报后台夜间批处理任务", log_file)
     log_message(f"计划文件: {plan_file}", log_file)
     log_message(f"输出目录: {output_dir}", log_file)
-    log_message(f"调用间隔: {interval_seconds} 秒 (5分钟)", log_file)
+    log_message(f"调用间隔: {interval_seconds} 秒 ({interval_seconds // 60}分钟)", log_file)
     log_message("==================================================", log_file)
 
     if not plan_file.exists():
@@ -161,7 +161,7 @@ def run_batch(
             _save_status(status_file, total_count, completed_count, skipped_count, failed_count, item, "failed", error=str(exc))
 
         if idx < total_count:
-            log_message(f"⏳ 等待冷却 {interval_seconds} 秒 (5分钟)，避免频繁调用资源...", log_file)
+            log_message(f"⏳ 等待冷却 {interval_seconds} 秒 ({interval_seconds // 60}分钟)，避免频繁调用资源...", log_file)
             time.sleep(interval_seconds)
 
     log_message("==================================================", log_file)
@@ -208,7 +208,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/daily_reports"), help="Output daily reports directory")
     parser.add_argument("--log-file", type=Path, default=Path("outputs/batch_july_august.log"), help="Log file path")
     parser.add_argument("--status-file", type=Path, default=Path("outputs/batch_july_august_status.json"), help="Status JSON file path")
-    parser.add_argument("--interval", type=int, default=300, help="Interval between videos in seconds (default: 300)")
+    parser.add_argument("--interval", type=int, default=600, help="Interval between videos in seconds (default: 600)")
     parser.add_argument("--start-at", default="auto-midnight", help="'auto-midnight', 'now', or 'YYYY-MM-DD HH:MM:SS' / 'HH:MM:SS'")
     parser.add_argument("--force", action="store_true", help="Force regenerate even if report already exists")
 
