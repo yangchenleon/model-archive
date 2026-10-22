@@ -376,7 +376,7 @@ def read_subtitles(
     threshold: float = CHANGE_THRESHOLD,
     use_det: bool = False,
     engine: RapidOCR | None = None,
-    mode: str = "band",
+    mode: str = "det",
 ) -> dict[str, Any]:
     work = Path(tempfile.mkdtemp(prefix="subs_"))
     try:
@@ -406,7 +406,7 @@ def read_subtitles(
     }
 
 
-def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float, mode: str = "band") -> None:
+def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float, mode: str = "det") -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     engine = make_engine(mode)  # one model load for the whole run
     for folder in sorted(reports_dir.iterdir()):
@@ -502,7 +502,7 @@ def main() -> None:
     parser.add_argument("--start-date", default="00000000")
     parser.add_argument("--end-date", default="99999999")
     parser.add_argument("--fps", type=float, default=2.0)
-    parser.add_argument("--mode", choices=["band", "rows", "det"], default="band",
+    parser.add_argument("--mode", choices=["band", "rows", "det"], default="det",
                         help="band=fast fixed crop, rows=outline-based line split, det=full detection")
     parser.add_argument("--check", action="store_true", help="Audit existing subtitle JSONs instead of OCR")
     parser.add_argument("--check-limit", type=int, default=60)
