@@ -255,9 +255,16 @@ def merge_repeats(cues: list[dict[str, Any]], threshold: float = 0.45) -> list[d
     emit the same sentence with different trailing labels; a high longest-common
     substring ratio means one cue, not several.
     """
+    def overlap(a: str, b: str) -> float:
+        sa, sb = set(a), set(b)
+        return len(sa & sb) / max(1, len(sa | sb))
+
     merged: list[dict[str, Any]] = []
     for cue in cues:
-        if merged and _containment(merged[-1]["text"], cue["text"]) >= threshold:
+        if merged and (
+            _containment(merged[-1]["text"], cue["text"]) >= threshold
+            or overlap(merged[-1]["text"], cue["text"]) >= 0.6
+        ):
             previous = merged[-1]
             previous["end"] = max(previous["end"], cue["end"])
             if len(cue["text"]) > len(previous["text"]):
@@ -323,7 +330,7 @@ def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float,
         if out_path.exists():
             print(f"{folder.name} 已存在，跳过", flush=True)
             continue
-        payload = read_subtitles(video, fps=fps, engine=engine)
+        payload = read_subtitles(video, fps=fps, engine=engine, mode=mode)
         out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{folder.name} cues={payload['cue_count']} chars={len(payload['text'])} ocr_calls={payload['ocr_calls']}", flush=True)
 
