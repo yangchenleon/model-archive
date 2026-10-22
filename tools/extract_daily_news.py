@@ -1,13 +1,11 @@
 """Extract and normalize daily toy/model news from video metadata and ASR transcripts.
 
-This module processes video transcripts and metadata into standardized daily
-toy news reports, including structured JSON, styled Markdown, and optional
-database-compatible product CSV rows.
+The module produces exactly one artifact, ``daily_report.json``; Markdown
+summaries and product CSV exports are deliberately not generated here.
 """
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime
 import json
 import os
@@ -20,8 +18,6 @@ from typing import Any
 from tools.config import load_env
 
 load_env()
-
-PRODUCT_CSV_FIELDS = ["厂商", "产品编号", "来源类型", "产品线", "模型名称", "版本/配色", "详情", "资料来源"]
 
 
 def get_beijing_date_str(metadata: dict[str, Any], fmt: str = "%Y-%m-%d") -> str:
@@ -150,115 +146,13 @@ def call_llm_json(prompt: str, model_override: str | None = None) -> dict[str, A
     raise RuntimeError(f"All LLM endpoints failed. Last error: {last_error}")
 
 
-def render_markdown_report(report_data: dict[str, Any], metadata: dict[str, Any]) -> str:
-    """Render a structured report dictionary into a styled Markdown article."""
-    title = report_data.get("report_title") or "模玩每日速报"
-    date_str = report_data.get("report_date") or metadata.get("upload_date") or ""
-    items = report_data.get("news_items") or []
-    source_url = metadata.get("webpage_url") or metadata.get("url") or ""
-    uploader = metadata.get("uploader") or ""
-
-    lines: list[str] = [
-        f"# {title}",
-        "",
-        f"> **发布日期**：{date_str} &nbsp;|&nbsp; **情报来源**：[{uploader}]({source_url}) &nbsp;|&nbsp; **整理统计**：共 {len(items)} 条模玩情报",
-        "",
-    ]
-    if summary:
-        lines.extend([
-            "## 📰 今日导读",
-            "",
-            summary,
-            "",
-            "---",
-            "",
-        ])
-
-    lines.extend([
-        "## 🎯 模玩快讯详情",
-        "",
-    ])
-
-    for idx, item in enumerate(items, 1):
-        brand = item.get("brand") or "未知厂商"
-        name = item.get("product_name") or "未命名产品"
-        scale = item.get("category_scale") or ""
-        news_type = item.get("news_type") or "情报更新"
-        price = item.get("price") or "暂未公布"
-        release = item.get("release_date") or "待定"
-        details = item.get("details") or ""
-
-        header_tags = [f"**厂商**：{brand}"]
-        if scale:
-            header_tags.append(f"**规格**：{scale}")
-
-        lines.append(f"### {idx}. 【{brand}】{name}")
-        lines.append("")
-        lines.append(f"- 🏷️ {' &nbsp;|&nbsp; '.join(header_tags)}")
-        lines.append(f"- 📌 **动态类型**：`{news_type}` &nbsp;|&nbsp; 💰 **参考价格**：`{price}` &nbsp;|&nbsp; ⏱️ **发售/出货**：`{release}`")
-        lines.append(f"- 📝 **速报解读**：{details}")
-        lines.append("")
-
-    lines.extend([
-        "---",
-        "",
-        "## 📊 模玩速报一览表",
-        "",
-        "| 序号 | 品牌 / 厂商 | 产品名称 | 规格类型 | 动态 | 价格 | 出货/发售 |",
-        "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
-    ])
-
-    for idx, item in enumerate(items, 1):
-        brand = item.get("brand", "").replace("|", "/")
-        name = item.get("product_name", "").replace("|", "/")
-        scale = item.get("category_scale", "").replace("|", "/")
-        news_type = item.get("news_type", "").replace("|", "/")
-        price = item.get("price", "-").replace("|", "/") or "-"
-        release = item.get("release_date", "-").replace("|", "/") or "-"
-        lines.append(f"| {idx} | {brand} | {name} | {scale} | {news_type} | {price} | {release} |")
-
-    lines.append("")
-    return "\n".join(lines)
-
-
-def export_product_csv(items: list[dict[str, Any]], output_path: Path, source_url: str) -> None:
-    """Convert daily news items into model-archive compatible product directory CSV."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=PRODUCT_CSV_FIELDS)
-        writer.writeheader()
-        for item in items:
-            brand = item.get("brand", "").strip()
-            name = item.get("product_name", "").strip()
-            if not name:
-                continue
-            scale = item.get("category_scale", "").strip()
-            details_text = f"[{item.get('news_type', '')}] {item.get('details', '')}"
-            if item.get("price"):
-                details_text += f" | 价格: {item.get('price')}"
-            if item.get("release_date"):
-                details_text += f" | 发售时间: {item.get('release_date')}"
-
-            writer.writerow({
-                "厂商": brand,
-                "产品编号": "",
-                "来源类型": "模玩速报",
-                "产品线": scale,
-                "模型名称": name,
-                "版本/配色": "",
-                "详情": details_text.strip(),
-                "资料来源": source_url,
-            })
-
-
 def extract_daily_news(
     transcript: str,
     metadata: dict[str, Any],
     output_dir: Path,
     model_override: str | None = None,
-    save_auxiliary: bool = False,
 ) -> dict[str, Any]:
-    """Execute daily news extraction and persist structured JSON (with raw transcript)."""
+    """Execute daily news extraction and persist ``daily_report.json`` only."""
     output_dir.mkdir(parents=True, exist_ok=True)
     prompt = build_news_prompt(transcript, metadata)
     report_data = call_llm_json(prompt, model_override=model_override)
@@ -277,24 +171,7 @@ def extract_daily_news(
     json_path = output_dir / "daily_report.json"
     json_path.write_text(json.dumps(report_data, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    md_path = None
-    csv_path = None
-    if save_auxiliary:
-        markdown_text = render_markdown_report(report_data, metadata)
-        md_file = output_dir / "daily_report.md"
-        md_file.write_text(markdown_text, encoding="utf-8")
-        md_path = str(md_file)
-
-        csv_file = output_dir / "products.csv"
-        export_product_csv(report_data.get("news_items", []), csv_file, source_url)
-        csv_path = str(csv_file)
-
-    return {
-        "report_data": report_data,
-        "json_path": str(json_path),
-        "md_path": md_path,
-        "csv_path": csv_path,
-    }
+    return {"report_data": report_data, "json_path": str(json_path)}
 
 
 def main() -> None:
@@ -316,8 +193,6 @@ def main() -> None:
     res = extract_daily_news(transcript, metadata, args.output_dir, model_override=args.model)
     print(json.dumps({
         "json": res["json_path"],
-        "markdown": res["md_path"],
-        "csv": res["csv_path"],
         "item_count": len(res["report_data"].get("news_items", [])),
     }, ensure_ascii=False, indent=2))
 
