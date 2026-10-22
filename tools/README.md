@@ -106,6 +106,11 @@ outputs/daily_reports/<YYYYMMDD>_<BV ID>/
   video/<BV ID>.info.json
 ```
 
+`tools.daily_pipeline` reads that layout: when `<report>/video/<BV>.mp4` already
+exists it reuses the file instead of downloading again, and it always moves the
+media out of `_temp` into the report folder. Skipping an already processed video
+is decided from the existing `daily_report.json` before any download starts.
+
 Days that already have a report folder are skipped, so the command is
 idempotent. `--listing` reuses a cached space listing instead of re-paginating
 Bilibili; `--dry-run` prints the selection. Each item records every same-day

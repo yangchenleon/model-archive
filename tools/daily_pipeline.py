@@ -9,6 +9,7 @@ import argparse
 import datetime
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -92,6 +93,78 @@ def get_latest_videos_from_space(space_url: str, limit: int = 1) -> list[dict[st
     return entries[:limit]
 
 
+def find_existing_report(output_base_dir: Path, video_id: str) -> Path | None:
+    """Return ``<YYYYMMDD>_<BV ID>/daily_report.json`` for an already processed video."""
+    if not output_base_dir.is_dir():
+        return None
+    for path in output_base_dir.glob(f"*_{video_id}"):
+        if path.is_dir() and (path / "daily_report.json").exists():
+            return path
+    return None
+
+
+def find_downloaded_media(output_base_dir: Path, video_id: str) -> dict[str, Any] | None:
+    """Return media already stored by the download-only stage for this video."""
+    if not output_base_dir.is_dir():
+        return None
+    for path in sorted(output_base_dir.glob(f"*_{video_id}")):
+        video_dir = path / "video"
+        media_path = video_dir / f"{video_id}.mp4"
+        metadata_path = video_dir / f"{video_id}.info.json"
+        if media_path.is_file() and metadata_path.is_file():
+            return {
+                "url": f"https://www.bilibili.com/video/{video_id}",
+                "video_id": video_id,
+                "media": str(media_path),
+                "metadata": str(metadata_path),
+            }
+    return None
+
+
+def _prune_temp_dirs(video_dir: Path) -> None:
+    """Remove the per-video ``_temp/<BV>`` tree once it is empty."""
+    for path in (video_dir, video_dir.parent, video_dir.parent.parent):
+        try:
+            path.rmdir()
+        except OSError:
+            break
+
+
+def _discard_temp(media: dict[str, Any]) -> None:
+    """Drop a download that is not needed (e.g. the report already existed)."""
+    source = Path(media["media"])
+    if "_temp" not in source.parts:
+        # Media coming from the download-only stage must never be deleted here.
+        return
+    source.unlink(missing_ok=True)
+    Path(media["metadata"]).unlink(missing_ok=True)
+    _prune_temp_dirs(source.parent)
+
+
+def move_media_to_report(report_dir: Path, media: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+    """Move the downloaded media into ``<report>/video`` and remove the temp copy.
+
+    ``download`` always writes under ``<work dir>/_temp/<BV>/video``. Leaving the
+    media there orphaned every processed video outside its report folder, so the
+    report folder only ever held ``*.info.json`` while ``_temp`` kept growing.
+    """
+    target_video_dir = report_dir / "video"
+    target_video_dir.mkdir(parents=True, exist_ok=True)
+    video_id = media["video_id"]
+    target_metadata = target_video_dir / f"{video_id}.info.json"
+    target_metadata.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    source = Path(media["media"])
+    target = target_video_dir / source.name
+    temp_metadata = Path(media["metadata"])
+    if source.resolve() != target.resolve():
+        shutil.move(str(source), str(target))
+    if temp_metadata.resolve() != target_metadata.resolve():
+        temp_metadata.unlink(missing_ok=True)
+    _prune_temp_dirs(source.parent)
+    return {**media, "media": str(target), "metadata": str(target_metadata)}
+
+
 def process_single_video(
     url: str,
     output_base_dir: Path,
@@ -106,9 +179,34 @@ def process_single_video(
     match = re.search(r"(BV[0-9A-Za-z]+)", url)
     video_id_hint = match.group(1) if match else "video"
 
+    # Check for an existing report before downloading, so re-running a range does
+    # not fetch media just to discard it.
+    if not force:
+        cached_dir = find_existing_report(output_base_dir, video_id_hint)
+        if cached_dir:
+            data = json.loads((cached_dir / "daily_report.json").read_text(encoding="utf-8"))
+            info_path = next(cached_dir.glob("video/*.info.json"), None)
+            title = json.loads(info_path.read_text(encoding="utf-8")).get("title") if info_path else None
+            print(f"ℹ️ 该视频日报已存在，跳过处理（如需重新生成请加 --force）: {cached_dir}")
+            return {
+                "video_id": video_id_hint,
+                "title": title,
+                "report_title": data.get("report_title"),
+                "items_count": len(data.get("news_items", [])),
+                "report_dir": str(cached_dir),
+                "json_path": str(cached_dir / "daily_report.json"),
+                "status": "cached",
+            }
+
     temp_video_dir = output_base_dir / "_temp" / video_id_hint / "video"
-    print(f"\n[1/4] 获取视频与元数据: {url}")
-    media = download(url, temp_video_dir, cookies_file=cookies_file)
+    local_media = None if force else find_downloaded_media(output_base_dir, video_id_hint)
+    if local_media:
+        # The download-only stage already stored the media in the report folder.
+        print(f"\n[1/4] 复用已下载视频: {local_media['media']}")
+        media = local_media
+    else:
+        print(f"\n[1/4] 获取视频与元数据: {url}")
+        media = download(url, temp_video_dir, cookies_file=cookies_file)
     video_id = media["video_id"]
     metadata_path = Path(media["metadata"])
     metadata: dict[str, Any] = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -122,6 +220,7 @@ def process_single_video(
     if not force and json_report.exists():
         print(f"ℹ️ 该视频日报已存在，跳过处理（如需重新生成请加 --force）: {report_dir}")
         data = json.loads(json_report.read_text(encoding="utf-8"))
+        _discard_temp(media)
         return {
             "video_id": video_id,
             "title": metadata.get("title"),
@@ -134,11 +233,8 @@ def process_single_video(
 
     report_dir.mkdir(parents=True, exist_ok=True)
 
-    # Move media & metadata to target report dir
-    target_video_dir = report_dir / "video"
-    target_video_dir.mkdir(parents=True, exist_ok=True)
-    target_metadata = target_video_dir / f"{video_id}.info.json"
-    target_metadata.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Keep media and metadata inside the report folder instead of _temp.
+    media = move_media_to_report(report_dir, media, metadata)
 
     # 2. Extract audio
     print(f"[2/4] 提取标准化音频 (16kHz WAV)...")
