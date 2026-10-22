@@ -121,6 +121,21 @@ Regenerate the cache with `.venv-tools/bin/python -m tools.fetch_space_videos
 build returned HTTP 412 from the space API while 2026.10.21 succeeded with no
 cookies.
 
+## Daily report: batch ASR stage
+
+`batch_daily_reports` walks `outputs/daily_reports` and runs the audio → ASR →
+LLM chain for every folder that has `video/*.mp4` but no `daily_report.json`:
+
+```bash
+.venv-tools/bin/python -m tools.batch_daily_reports --interval 5
+```
+
+It reuses the downloaded media (no second download), skips days that already
+have a report, keeps going after a failure, and records progress in
+`outputs/daily_batch_status.json` plus the append-only `outputs/daily_batch.log`.
+Re-running the same command retries only the folders that are still missing a
+report, so `--start-date`/`--end-date` narrow it down to a date range.
+
 ## Artifact layout
 
 ```text
