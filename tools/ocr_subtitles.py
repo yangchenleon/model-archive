@@ -53,9 +53,8 @@ def sample_frames(video: Path, out_dir: Path, fps: float, top: float, bottom: fl
     return sorted(out_dir.glob("f_*.jpg"))
 
 
-def ocr_frames(frames: list[Path], threshold: float, min_score: float, use_det: bool) -> tuple[list[tuple[str, float]], int]:
+def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score: float, use_det: bool) -> tuple[list[tuple[str, float]], int]:
     """OCR the frames whose band changed; returns (texts, ocr_calls)."""
-    engine = RapidOCR()
     texts: list[tuple[str, float]] = []
     previous = None
     last_text, last_score = "", 0.0
@@ -110,6 +109,84 @@ def build_cues(texts: list[tuple[str, float]], fps: float) -> list[dict[str, Any
     return cues
 
 
+def outline_rows(image: "np.ndarray", top: float, bottom: float) -> list["np.ndarray"]:
+    """Split the subtitle band into line crops using the glyph outline.
+
+    A plain white-pixel projection merges everything when the background is
+    bright, so we require white pixels adjacent to dark pixels (the stroke).
+    Columns are then trimmed to the detected glyphs, which keeps stray graphics
+    out of the recognition input.
+    """
+    height = image.shape[0]
+    band = image[int(height * top):int(height * bottom)]
+    white = ((band[:, :, 0] > 200) & (band[:, :, 1] > 200) & (band[:, :, 2] > 200)).astype(np.uint8)
+    dark = ((band[:, :, 0] < 70) & (band[:, :, 1] < 70) & (band[:, :, 2] < 70)).astype(np.uint8)
+    kernel = np.ones((5, 5), np.uint8)
+    outline = cv2.dilate(white, kernel) & cv2.dilate(dark, kernel)
+    projection = outline.sum(axis=1)
+    threshold = max(10, int(band.shape[1] * 0.03))
+    ranges: list[tuple[int, int]] = []
+    start = None
+    for y, value in enumerate(projection):
+        if value > threshold and start is None:
+            start = y
+        elif value <= threshold and start is not None:
+            if y - start >= 18:
+                ranges.append((max(0, start - 4), min(band.shape[0], y + 4)))
+            start = None
+    if start is not None and len(projection) - start >= 18:
+        ranges.append((max(0, start - 4), len(projection)))
+
+    crops: list["np.ndarray"] = []
+    for y0, y1 in ranges:
+        columns = outline[y0:y1].sum(axis=0)
+        xs = np.where(columns > 0)[0]
+        if len(xs) == 0:
+            continue
+        x0, x1 = max(0, xs[0] - 8), min(band.shape[1], xs[-1] + 8)
+        crop = band[y0:y1, x0:x1]
+        if crop.shape[0] >= 18 and crop.shape[1] >= 20:
+            crops.append(crop)
+    return crops
+
+
+def make_engine(mode: str) -> RapidOCR:
+    """Detection defaults upscale the wide band to a 736px short side (~5000px
+    wide), which costs ~5 s/frame. Capping the long side makes it ~1 s/frame
+    with the same accuracy."""
+    if mode == "det":
+        return RapidOCR(det_limit_side_len=736, det_limit_type="max")
+    return RapidOCR()
+
+
+def read_subtitles_rows(
+    frames: list[Path],
+    engine: RapidOCR,
+    top: float,
+    bottom: float,
+    min_score: float,
+) -> list[tuple[str, float]]:
+    texts: list[tuple[str, float]] = []
+    for frame in frames:
+        image = cv2.imread(str(frame))
+        if image is None:
+            texts.append(("", 0.0))
+            continue
+        crops = outline_rows(image, top, bottom)
+        pieces: list[str] = []
+        scores: list[float] = []
+        for crop in crops:
+            crop = cv2.resize(crop, (1280, max(1, int(crop.shape[0] * 1280 / crop.shape[1]))))
+            result, _ = engine(crop, use_det=False, use_cls=False, use_rec=True)
+            for item in result or []:
+                text, score = item[0], float(item[-1])
+                if score >= min_score:
+                    pieces.append(text)
+                    scores.append(score)
+        texts.append((norm_text("".join(pieces)), min(scores) if scores else 0.0))
+    return texts
+
+
 def read_subtitles(
     video: Path,
     fps: float = 2.0,
@@ -118,11 +195,21 @@ def read_subtitles(
     width: int = 960,
     threshold: float = CHANGE_THRESHOLD,
     use_det: bool = False,
+    engine: RapidOCR | None = None,
+    mode: str = "band",
 ) -> dict[str, Any]:
     work = Path(tempfile.mkdtemp(prefix="subs_"))
     try:
+        if mode in ("rows", "det"):
+            top, bottom, width = 0.72, 0.98, 1920
+        if mode == "det":
+            use_det = True
         frames = sample_frames(video, work, fps, top, bottom, width)
-        texts, calls = ocr_frames(frames, threshold, 0.5, use_det)
+        if mode == "rows":
+            texts = read_subtitles_rows(frames, engine or RapidOCR(), top, bottom, 0.5)
+            calls = len(frames)
+        else:
+            texts, calls = ocr_frames(frames, engine or RapidOCR(), threshold, 0.5, use_det)
         cues = build_cues(texts, fps)
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -130,6 +217,7 @@ def read_subtitles(
         "video": str(video),
         "fps": fps,
         "crop": [top, bottom],
+        "mode": mode,
         "frames": len(frames),
         "ocr_calls": calls,
         "cue_count": len(cues),
@@ -138,8 +226,9 @@ def read_subtitles(
     }
 
 
-def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float) -> None:
+def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float, mode: str = "band") -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
+    engine = make_engine(mode)  # one model load for the whole run
     for folder in sorted(reports_dir.iterdir()):
         if not folder.is_dir():
             continue
@@ -153,9 +242,75 @@ def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float)
         if out_path.exists():
             print(f"{folder.name} 已存在，跳过", flush=True)
             continue
-        payload = read_subtitles(video, fps=fps)
+        payload = read_subtitles(video, fps=fps, engine=engine)
         out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{folder.name} cues={payload['cue_count']} chars={len(payload['text'])} ocr_calls={payload['ocr_calls']}", flush=True)
+
+
+RARE_CHARS = set("眞義劵養卽爲祕覈")
+SYMBOL_NOISE = re.compile(r"[\"'“”#@]{2,}|[，。！？、]{2,}")
+
+
+def suspicion(cue: dict[str, Any]) -> list[str]:
+    """Cheap heuristics for lines a human should eyeball before trusting OCR."""
+    text = cue.get("text", "")
+    reasons: list[str] = []
+    if cue.get("score", 1.0) < 0.75:
+        reasons.append("低置信")
+    if len(text) <= 3:
+        reasons.append("过短")
+    if text and not re.search(r"[\u4e00-\u9fff]", text):
+        reasons.append("无汉字")
+    if SYMBOL_NOISE.search(text):
+        reasons.append("符号噪声")
+    if any(char in RARE_CHARS for char in text):
+        reasons.append("生僻字")
+    if re.search(r"(.)\1{3,}", text):
+        reasons.append("重复字符")
+    return reasons
+
+
+def check(output_dir: Path, limit: int) -> None:
+    files = sorted(output_dir.glob("*.json"))
+    if not files:
+        print(f"{output_dir} 下没有字幕 JSON")
+        return
+    total_cues = 0
+    flagged: list[dict[str, Any]] = []
+    per_video: list[dict[str, Any]] = []
+    for path in files:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        cues = payload.get("cues") or []
+        total_cues += len(cues)
+        scores = [cue["score"] for cue in cues if cue.get("score")]
+        per_video.append({
+            "file": path.stem,
+            "cues": len(cues),
+            "chars": len(payload.get("text", "")),
+            "avg_score": round(sum(scores) / len(scores), 3) if scores else 0,
+        })
+        for cue in cues:
+            reasons = suspicion(cue)
+            if reasons:
+                flagged.append({
+                    "file": path.stem,
+                    "start": cue["start"],
+                    "text": cue["text"],
+                    "score": cue["score"],
+                    "reasons": reasons,
+                })
+    avg = sum(v["avg_score"] for v in per_video) / len(per_video)
+    print(f"视频 {len(per_video)} 个 | 字幕行 {total_cues} 条 | 平均置信 {avg:.3f} | 可疑 {len(flagged)} 条")
+    low = sum(1 for v in per_video if v["avg_score"] < 0.9)
+    print(f"平均置信 <0.9 的视频: {low} 个")
+    print("\n=== 可疑行（前 {limit} 条，按视频顺序） ===".format(limit=limit))
+    for item in flagged[:limit]:
+        print(f"[{item['file']}] {item['start']:6.1f}s {item['score']:.2f} {','.join(item['reasons']):12s} {item['text']}")
+
+    report = {"videos": len(per_video), "cues": total_cues, "avg_score": round(avg, 3),
+              "flagged": len(flagged), "items": flagged, "per_video": per_video}
+    (output_dir / "_qa.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n报告已写入 {output_dir / '_qa.json'}")
 
 
 def main() -> None:
@@ -168,17 +323,25 @@ def main() -> None:
     parser.add_argument("--end-date", default="99999999")
     parser.add_argument("--fps", type=float, default=2.0)
     parser.add_argument("--use-det", action="store_true", help="Full detection (handles wrapped lines, slower)")
+    parser.add_argument("--mode", choices=["band", "rows", "det"], default="band",
+                        help="band=fast fixed crop, rows=outline-based line split, det=full detection")
+    parser.add_argument("--check", action="store_true", help="Audit existing subtitle JSONs instead of OCR")
+    parser.add_argument("--check-limit", type=int, default=60)
     args = parser.parse_args()
 
+    if args.check:
+        check(args.output_dir, args.check_limit)
+        return
+
     if args.video:
-        payload = read_subtitles(args.video, fps=args.fps, use_det=args.use_det)
+        payload = read_subtitles(args.video, fps=args.fps, use_det=args.use_det, mode=args.mode, engine=make_engine(args.mode))
         target = args.output or Path("outputs/daily_v2/subtitles") / f"{args.video.stem}.json"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{target} cues={payload['cue_count']} chars={len(payload['text'])} ocr_calls={payload['ocr_calls']}")
         return
 
-    batch(args.reports_dir, args.start_date, args.end_date, args.output_dir, args.fps)
+    batch(args.reports_dir, args.start_date, args.end_date, args.output_dir, args.fps, args.mode)
 
 
 if __name__ == "__main__":

@@ -177,19 +177,46 @@ ASR chunks, gives an exact timestamp per line:
   --output outputs/daily_v2/subtitles/20260823_BV1ro8W6jEo3.json
 ```
 
-It samples the bottom band at 2 fps, skips frames whose band did not change,
-runs RapidOCR recognition only (detection costs ~2 s/frame and is off by
-default), and merges consecutive lines into cues:
+It samples the bottom band at 2 fps, merges consecutive lines into cues, and
+offers three recognition modes (measured on a 30 s clip, 1920×1080 source):
+
+| mode | time / 30s | quality |
+| --- | --- | --- |
+| `band` (default) | 3–5 s | fast; two-line subtitles get cut or merged |
+| `rows` | 8–10 s | outline-based line split; some lines still misread |
+| `det` | 45 s | full detection; matches the burned-in text |
+
+`det` is the accurate mode. Its default config upscales the wide band to a
+736 px short side (~5000 px wide), which costs ~5 s/frame; capping the *long*
+side (`det_limit_side_len=736, det_limit_type=max` in `make_engine`) brings it
+to ~1.5 s/frame with identical output. Use `--mode det` when text accuracy
+matters more than throughput:
+
+```bash
+.venv-tools/bin/python -m tools.ocr_subtitles --mode det \
+  --video .../BV1ro8W6jEo3.mp4 --output .../20260823_BV1ro8W6jEo3.json
+```
 
 ```json
-{"start": 82.5, "end": 86.0, "text": "首先瘦虎模型带来年度MG巴巴托斯天狼座", "score": 0.97}
+{"start": 7.5, "end": 11.5, "text": "首先万象聚变带来第二弹机体流星终干更新", "score": 0.99}
 ```
 
 The cue start maps directly to a Bilibili deep link (`?t=82`). OCR fixes proper
-nouns ASR mangles (MG / 998 / 狙击型 / SDCS), while ASR is better on brand names
-(酋长大陆 / 三兵系列 / 玄武), so the two are meant to be fused: use the subtitle
-text as primary and the ASR transcript as a correction pass. `--use-det` handles
-wrapped two-line subtitles at roughly 5x the cost.
+nouns ASR mangles (MG / 998 / 狙击型 / SDCS). The remaining misses are
+font-variant confusions (e.g. 酋长 read as 仓长) and are accepted: this UP uses
+the OCR pipeline as-is, without an ASR fusion pass.
+
+Note: the reviewer's own subtitle text sometimes disagrees with the spoken
+brand name (verified: `3MIN系列` and `宣武` are what the video shows, not OCR
+errors), so do not "correct" those by rule. `--check` audits existing outputs
+for low-confidence / malformed lines that are worth a human glance:
+
+```bash
+.venv-tools/bin/python -m tools.ocr_subtitles --check --check-limit 60
+```
+
+The batch reuses one RapidOCR engine; creating it per video leaks ~370 MB and
+turns a 20 s video into minutes.
 
 ## Artifact layout
 
