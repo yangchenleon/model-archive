@@ -92,6 +92,13 @@ def keep_subtitle_box(box, gray: "np.ndarray", min_white: float = 0.2, min_aspec
         return False
     if width / height < min_aspect:
         return False
+    frame_width = gray.shape[1]
+    center_x = (min(xs) + max(xs)) / 2
+    if center_x < frame_width * 0.15 or center_x > frame_width * 0.85:
+        # graphics pinned to the frame edges are not subtitles
+        return False
+    if max(xs) >= frame_width * 0.98 and width < frame_width * 0.2:
+        return False
     x0, y0 = int(max(0, min(xs))), int(max(0, min(ys)))
     x1, y1 = int(max(xs)), int(max(ys))
     roi = gray[y0:y1, x0:x1]
@@ -200,25 +207,50 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
     return texts, calls
 
 
+def _modal_text(samples: list[tuple[str, float]]) -> str:
+    """Pick the most frequent reading for a cue.
+
+    A single animation frame can add decorative text (e.g. side labels), while
+    every other frame of the same subtitle reads cleanly; majority vote keeps
+    the stable reading instead of the longest one.
+    """
+    counts: dict[str, list] = {}
+    for text, score in samples:
+        key = "".join(sorted(norm_text(text)))
+        entry = counts.setdefault(key, [0, text, score])
+        entry[0] += 1
+        if entry[0] > 1 and len(text) > len(entry[1]):
+            entry[1] = text
+        entry[2] = max(entry[2], score)
+    best = max(counts.values(), key=lambda item: (item[0], len(item[1])))
+    return best[1]
+
+
 def build_cues(texts: list[tuple[str, float]], fps: float) -> list[dict[str, Any]]:
     cues: list[dict[str, Any]] = []
-    current: dict[str, Any] | None = None
+    group: list[tuple[str, float]] = []
+    start = end = 0.0
     step = 1.0 / fps
     for index, (text, score) in enumerate(texts):
         stamp = index * step
         if not text:
+            if group:
+                cues.append({"start": round(start, 2), "end": round(end, 2),
+                             "text": _modal_text(group), "score": round(max(s for _, s in group), 3)})
+                group = []
             continue
-        if current and similar(current["text"], text) >= CUE_SIMILARITY:
-            current["end"] = round(stamp + step, 2)
-            if len(text) > len(current["text"]):
-                current["text"] = text
-            current["score"] = max(current["score"], score)
+        if group and similar(_modal_text(group), text) >= CUE_SIMILARITY:
+            group.append((text, score))
+            end = stamp + step
             continue
-        if current:
-            cues.append(current)
-        current = {"start": round(stamp, 2), "end": round(stamp + step, 2), "text": text, "score": round(score, 3)}
-    if current:
-        cues.append(current)
+        if group:
+            cues.append({"start": round(start, 2), "end": round(end, 2),
+                         "text": _modal_text(group), "score": round(max(s for _, s in group), 3)})
+        group = [(text, score)]
+        start, end = stamp, stamp + step
+    if group:
+        cues.append({"start": round(start, 2), "end": round(end, 2),
+                     "text": _modal_text(group), "score": round(max(s for _, s in group), 3)})
     return cues
 
 
@@ -327,8 +359,8 @@ def merge_repeats(cues: list[dict[str, Any]], threshold: float = 0.45) -> list[d
         ):
             previous = merged[-1]
             previous["end"] = max(previous["end"], cue["end"])
-            if len(cue["text"]) > len(previous["text"]):
-                previous["text"] = cue["text"]
+            # keep the earlier reading: build_cues already majority-voted it, and
+            # a transient animation frame is usually the longer/noisier variant
             previous["score"] = max(previous["score"], cue["score"])
             continue
         merged.append(dict(cue))
