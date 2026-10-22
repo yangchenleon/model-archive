@@ -73,7 +73,9 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
         calls += 1
         if use_det:
             result, _ = engine(str(frame))
-            lines = [(text, score) for _box, text, score in (result or []) if score >= min_score]
+            # two-line subtitles can come back bottom-first; restore reading order
+            ordered = sorted(result or [], key=lambda item: item[0][0][1])
+            lines = [(text, score) for _box, text, score in ordered if score >= min_score]
         else:
             result, _ = engine(str(frame), use_det=False, use_cls=False, use_rec=True)
             lines = []
@@ -187,6 +189,34 @@ def read_subtitles_rows(
     return texts
 
 
+def _containment(a: str, b: str) -> float:
+    """Longest common substring relative to the shorter text."""
+    if not a or not b:
+        return 0.0
+    match = difflib.SequenceMatcher(None, a, b).find_longest_match(0, len(a), 0, len(b))
+    return match.size / max(1, min(len(a), len(b)))
+
+
+def merge_repeats(cues: list[dict[str, Any]], threshold: float = 0.45) -> list[dict[str, Any]]:
+    """Collapse consecutive cues that are the same line plus overlay noise.
+
+    Product graphics change while a subtitle stays on screen, so detection can
+    emit the same sentence with different trailing labels; a high longest-common
+    substring ratio means one cue, not several.
+    """
+    merged: list[dict[str, Any]] = []
+    for cue in cues:
+        if merged and _containment(merged[-1]["text"], cue["text"]) >= threshold:
+            previous = merged[-1]
+            previous["end"] = max(previous["end"], cue["end"])
+            if len(cue["text"]) > len(previous["text"]):
+                previous["text"] = cue["text"]
+            previous["score"] = max(previous["score"], cue["score"])
+            continue
+        merged.append(dict(cue))
+    return merged
+
+
 def read_subtitles(
     video: Path,
     fps: float = 2.0,
@@ -210,7 +240,7 @@ def read_subtitles(
             calls = len(frames)
         else:
             texts, calls = ocr_frames(frames, engine or RapidOCR(), threshold, 0.5, use_det)
-        cues = build_cues(texts, fps)
+        cues = merge_repeats(build_cues(texts, fps))
     finally:
         shutil.rmtree(work, ignore_errors=True)
     return {
