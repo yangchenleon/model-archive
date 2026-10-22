@@ -83,6 +83,39 @@ are visual source artifacts, not CSV rows; OCR or a vision-language stage can
 consume the selected frames afterward. Do not treat an empty CSV as valid
 product data.
 
+## Daily report: download-only stage
+
+`download_daily_videos` performs only source retrieval for the Daily Toy News
+archive, so the expensive ASR/LLM stages can be batched separately later:
+
+```bash
+.venv-tools/bin/python -m tools.download_daily_videos \
+  --start-date 2026-09-18 --end-date 2026-10-22 \
+  --listing /tmp/space_all.json \
+  --manifest outputs/daily_download_manifest.json
+```
+
+It scores the UP space uploads per calendar day with
+`tools.filter_daily_videos`, keeps the best "daily news" candidate, and writes
+the established layout without touching `audio/`, `transcript/` or
+`daily_report.json`:
+
+```text
+outputs/daily_reports/<YYYYMMDD>_<BV ID>/
+  video/<BV ID>.mp4
+  video/<BV ID>.info.json
+```
+
+Days that already have a report folder are skipped, so the command is
+idempotent. `--listing` reuses a cached space listing instead of re-paginating
+Bilibili; `--dry-run` prints the selection. Each item records every same-day
+candidate in the manifest, so a later stage can swap a rejected pick.
+
+Regenerate the cache with `.venv-tools/bin/python -m tools.fetch_space_videos
+--max-items 120 --output /tmp/space_all.json`. Keep `yt-dlp` current: a 2026-07
+build returned HTTP 412 from the space API while 2026.10.21 succeeded with no
+cookies.
+
 ## Artifact layout
 
 ```text
@@ -160,8 +193,9 @@ automatically splits WAV input into 60-second requests. It defaults to
 `qwen3-asr-flash`; override it with `--asr-model` or `ASR_MODEL`.
 
 Each stage is independently runnable and writes stable artifacts under the
-work directory. The CSV has the exact columns from
-`templates/csv/products-manual-template.csv`; inspect it before importing:
+work directory. The CSV must use exactly the columns
+`厂商,产品编号,来源类型,产品线,模型名称,版本/配色,详情,资料来源`; inspect it before
+importing:
 
 ```bash
 docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv
