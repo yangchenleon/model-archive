@@ -7,8 +7,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 # Local CSV files used for one-off imports are not versioned.
-imports/*
-!imports/.gitkeep
+imports/
+# Scratch files and throwaway downloads from ad-hoc tooling.
+.tmp/
 # Local database dumps are not versioned.
 backups/
 ocr-results/
