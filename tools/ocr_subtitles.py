@@ -78,7 +78,7 @@ def order_boxes(items: list[Any], line_tolerance: float = 40.0) -> list[Any]:
     return ordered
 
 
-def keep_subtitle_box(box, gray: "np.ndarray", min_white: float = 0.2, min_aspect: float = 1.2, min_width: int = 60) -> bool:
+def keep_subtitle_box(box, gray: "np.ndarray", min_white: float = 0.2, min_aspect: float = 1.2, min_width: int = 60, min_height: int = 50) -> bool:
     """Reject boxes that are not subtitle lines.
 
     Text printed on the model itself (e.g. ``EFSF``, ``RX-BINI``) is short,
@@ -88,7 +88,8 @@ def keep_subtitle_box(box, gray: "np.ndarray", min_white: float = 0.2, min_aspec
     xs = [point[0] for point in box]
     ys = [point[1] for point in box]
     width, height = max(xs) - min(xs), max(ys) - min(ys)
-    if width < min_width or height <= 0:
+    if width < min_width or height < min_height:
+        # table rows / product specs are rendered much smaller than subtitles
         return False
     if width / height < min_aspect:
         return False
@@ -132,12 +133,27 @@ def _min_x(box: Any) -> float:
     return min(point[0] for point in box)
 
 
-def group_lines(boxes: list[Any], tolerance: float = 40.0) -> list[list[Any]]:
-    """Cluster detection boxes into visual lines, ordered top-to-bottom."""
+def group_lines(boxes: list[Any], tolerance: float = 40.0, x_gap: float = 120.0) -> list[list[Any]]:
+    """Cluster boxes into visual text runs: close in y *and* horizontally adjacent.
+
+    A y-only tolerance merges the left and right columns of a product table (or
+    several cards) into one fake "line"; requiring the horizontal gap to be small
+    keeps such boxes as separate runs.
+    """
+    def gap_to_line(box: Any, line: list[Any]) -> float:
+        bx0, bx1 = min(p[0] for p in box), max(p[0] for p in box)
+        best = float("inf")
+        for other in line:
+            ox0, ox1 = min(p[0] for p in other), max(p[0] for p in other)
+            best = min(best, max(bx0, ox0) - min(bx1, ox1))
+        return best
+
     lines: list[list[Any]] = []
     for box in sorted(boxes, key=_mean_y):
-        if lines and abs(_mean_y(box) - _mean_y(lines[-1][0])) <= tolerance:
-            lines[-1].append(box)
+        for line in lines:
+            if abs(_mean_y(box) - _mean_y(line[0])) <= tolerance and gap_to_line(box, line) <= x_gap:
+                line.append(box)
+                break
         else:
             lines.append([box])
     return [sorted(line, key=_min_x) for line in lines]
@@ -190,7 +206,13 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
                 if item[2] >= min_score and keep_subtitle_box(item[0], gray)
             ]
             lines = []
+            width = gray.shape[1]
             for line in group_lines(boxes):
+                xs = [point[0] for box in line for point in box]
+                center = (min(xs) + max(xs)) / 2 / width
+                if abs(center - 0.5) > 0.05:
+                    # subtitles are horizontally symmetric; tables/cards are not
+                    continue
                 text, score = read_line_crop(image, engine, line)
                 if text and score >= min_score:
                     lines.append((text, score))
