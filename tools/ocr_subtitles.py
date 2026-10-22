@@ -53,6 +53,53 @@ def sample_frames(video: Path, out_dir: Path, fps: float, top: float, bottom: fl
     return sorted(out_dir.glob("f_*.jpg"))
 
 
+def order_boxes(items: list[Any], line_tolerance: float = 40.0) -> list[Any]:
+    """Group boxes into visual lines by y, then order each line left to right.
+
+    A subtitle is often split into several coloured segments; sorting purely by
+    y interleaves them (the yellow part can sit a few pixels higher), so the
+    boxes must be clustered into a line first.
+    """
+    def center_y(item: Any) -> float:
+        return sum(point[1] for point in item[0]) / len(item[0])
+
+    def left_x(item: Any) -> float:
+        return min(point[0] for point in item[0])
+
+    lines: list[list[Any]] = []
+    for item in sorted(items, key=center_y):
+        if lines and abs(center_y(item) - center_y(lines[-1][0])) <= line_tolerance:
+            lines[-1].append(item)
+        else:
+            lines.append([item])
+    ordered: list[Any] = []
+    for line in lines:
+        ordered.extend(sorted(line, key=left_x))
+    return ordered
+
+
+def keep_subtitle_box(box, gray: "np.ndarray", min_white: float = 0.2, min_aspect: float = 1.2, min_width: int = 60) -> bool:
+    """Reject boxes that are not subtitle lines.
+
+    Text printed on the model itself (e.g. ``EFSF``, ``RX-BINI``) is short,
+    squarish and dark, while subtitles are wide, flat and predominantly white
+    with a black outline, so geometry plus white-pixel ratio separates them.
+    """
+    xs = [point[0] for point in box]
+    ys = [point[1] for point in box]
+    width, height = max(xs) - min(xs), max(ys) - min(ys)
+    if width < min_width or height <= 0:
+        return False
+    if width / height < min_aspect:
+        return False
+    x0, y0 = int(max(0, min(xs))), int(max(0, min(ys)))
+    x1, y1 = int(max(xs)), int(max(ys))
+    roi = gray[y0:y1, x0:x1]
+    if roi.size == 0:
+        return False
+    return float((roi > 200).mean()) >= min_white
+
+
 def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score: float, use_det: bool) -> tuple[list[tuple[str, float]], int]:
     """OCR the frames whose band changed; returns (texts, ocr_calls)."""
     texts: list[tuple[str, float]] = []
@@ -74,8 +121,12 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
         if use_det:
             result, _ = engine(str(frame))
             # two-line subtitles can come back bottom-first; restore reading order
-            ordered = sorted(result or [], key=lambda item: item[0][0][1])
-            lines = [(text, score) for _box, text, score in ordered if score >= min_score]
+            ordered = order_boxes(result or [])
+            lines = [
+                (text, score)
+                for box, text, score in ordered
+                if score >= min_score and keep_subtitle_box(box, image)
+            ]
         else:
             result, _ = engine(str(frame), use_det=False, use_cls=False, use_rec=True)
             lines = []
