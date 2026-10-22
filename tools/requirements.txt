@@ -1,2 +1,4 @@
 # Required runtime dependency for Bilibili downloads.
 yt-dlp>=2025.1.0
+# Optional: OCR of burned-in subtitles (tools.ocr_subtitles).
+rapidocr_onnxruntime>=1.4

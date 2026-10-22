@@ -165,6 +165,32 @@ reconciliation for media samples, and flags for stage regressions. Artifacts:
 `outputs/daily_v2/mentions/*.json`, `products.json`, `review.json`,
 `summary.json`.
 
+## Burned-in subtitles: OCR with timestamps
+
+Some reviewers burn subtitles into the frame (verified on 嘟嘟模玩). OCR of the
+subtitle band yields text that is complementary to ASR and, unlike the 60-second
+ASR chunks, gives an exact timestamp per line:
+
+```bash
+.venv-tools/bin/python -m tools.ocr_subtitles \
+  --video outputs/daily_reports/20260823_BV1ro8W6jEo3/video/BV1ro8W6jEo3.mp4 \
+  --output outputs/daily_v2/subtitles/20260823_BV1ro8W6jEo3.json
+```
+
+It samples the bottom band at 2 fps, skips frames whose band did not change,
+runs RapidOCR recognition only (detection costs ~2 s/frame and is off by
+default), and merges consecutive lines into cues:
+
+```json
+{"start": 82.5, "end": 86.0, "text": "首先瘦虎模型带来年度MG巴巴托斯天狼座", "score": 0.97}
+```
+
+The cue start maps directly to a Bilibili deep link (`?t=82`). OCR fixes proper
+nouns ASR mangles (MG / 998 / 狙击型 / SDCS), while ASR is better on brand names
+(酋长大陆 / 三兵系列 / 玄武), so the two are meant to be fused: use the subtitle
+text as primary and the ASR transcript as a correction pass. `--use-det` handles
+wrapped two-line subtitles at roughly 5x the cost.
+
 ## Artifact layout
 
 ```text
