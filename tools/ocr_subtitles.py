@@ -28,7 +28,7 @@ from rapidocr_onnxruntime import RapidOCR
 
 SPACE = re.compile(r"\s+")
 CUE_SIMILARITY = 0.80
-CHANGE_THRESHOLD = 1.2
+CHANGE_THRESHOLD = 0.05
 
 
 def norm_text(text: str) -> str:
@@ -110,7 +110,6 @@ def keep_subtitle_box(box, gray: "np.ndarray", min_white: float = 0.2, min_aspec
 
 SUB_RULES = [
     (re.compile(r"[\u4e00-\u9fff]长大陆"), "酋长大陆"),          # 酋 is a hard glyph for OCR
-    (re.compile(r"(?<=[\u4e00-\u9fff])7(?=[\u4e00-\u9fff])"), "了"),  # 了 often read as 7
     (re.compile("终干"), "终于"),
     (re.compile("处干"), "处于"),
     (re.compile("查接"), "直接"),
@@ -118,8 +117,32 @@ SUB_RULES = [
 ]
 
 
+SEVEN_UNITS = set("月日号元块折点岁成倍年位米克斤分秒天周届%")
+
+
+def _fix_seven(text: str) -> str:
+    """Turn a misread ``7`` back into ``了`` only in grammatical positions.
+
+    ``了`` sits after a Chinese character and before another character or
+    punctuation, while a real digit 7 is followed by a digit or a unit
+    (``75``, ``1比72``, ``7月``), so the context separates the two.
+    """
+    out: list[str] = []
+    for index, char in enumerate(text):
+        if char == "7" and index > 0:
+            prev_char = text[index - 1]
+            next_char = text[index + 1] if index + 1 < len(text) else ""
+            grammatic = next_char == "" or ("\u4e00" <= next_char <= "\u9fff") or next_char in "，。！？、；："
+            if "\u4e00" <= prev_char <= "\u9fff" and grammatic and next_char not in SEVEN_UNITS:
+                out.append("了")
+                continue
+        out.append(char)
+    return "".join(out)
+
+
 def postprocess(text: str) -> str:
     """Font-specific fixes that are safe to apply unconditionally."""
+    text = _fix_seven(text)
     for pattern, replacement in SUB_RULES:
         text = pattern.sub(replacement, text)
     return text
@@ -192,9 +215,11 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
             texts.append((last_text, last_score))
             continue
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        thumb = cv2.resize(gray, (128, 16), interpolation=cv2.INTER_AREA)
-        changed = previous is None or float(np.mean(cv2.absdiff(previous, thumb))) > threshold
-        previous = thumb
+        # compare only the white-text mask: background motion no longer triggers OCR
+        mask = (gray > 200).astype(np.uint8)
+        signature = (cv2.resize(mask, (96, 12), interpolation=cv2.INTER_AREA) > 0.25).astype(np.uint8)
+        changed = previous is None or float(np.mean(signature != previous)) > threshold
+        previous = signature
         if not changed:
             texts.append((last_text, last_score))
             continue
@@ -391,7 +416,7 @@ def merge_repeats(cues: list[dict[str, Any]], threshold: float = 0.45) -> list[d
 
 def read_subtitles(
     video: Path,
-    fps: float = 2.0,
+    fps: float = 4.0,
     top: float = 0.82,
     bottom: float = 0.96,
     width: int = 960,
@@ -523,7 +548,7 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/daily_v2/subtitles"))
     parser.add_argument("--start-date", default="00000000")
     parser.add_argument("--end-date", default="99999999")
-    parser.add_argument("--fps", type=float, default=2.0)
+    parser.add_argument("--fps", type=float, default=4.0)
     parser.add_argument("--mode", choices=["band", "rows", "det"], default="det",
                         help="band=fast fixed crop, rows=outline-based line split, det=full detection")
     parser.add_argument("--check", action="store_true", help="Audit existing subtitle JSONs instead of OCR")
