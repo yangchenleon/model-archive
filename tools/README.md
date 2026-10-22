@@ -136,6 +136,35 @@ have a report, keeps going after a failure, and records progress in
 Re-running the same command retries only the folders that are still missing a
 report, so `--start-date`/`--end-date` narrow it down to a date range.
 
+## Daily report v2: mentions and product alignment
+
+The v1 report (`extract_daily_news`) emits one free-form `news_type` per item,
+which cannot answer "how did this product move from announcement to shelf".
+The v2 pair replaces the post-ASR stage with an event-sourced design:
+
+```bash
+.venv-tools/bin/python -m tools.extract_daily_mentions \
+  --start-date 20260823 --end-date 20260922
+
+.venv-tools/bin/python -m tools.align_daily_mentions
+```
+
+`extract_daily_mentions` turns each transcript into atomic mentions with a
+controlled `stage` (rumor → teaser → announced → preorder → released →
+reprint/discontinued), an orthogonal `event` (price_change, delay, review,
+accessory, payment, expo, recall, info_update), and a split identity
+(`brand` / `line` / `model_name` / `variant`). Every mention also carries the
+verbatim `stage_cue` that justified the stage.
+
+`align_daily_mentions` folds mentions into product entities and keeps the full
+timeline, so the product directory stays one row per product while every
+pre-release update is auditable. Matching is exact key first
+(brand + grade + normalized name), then fuzzy (≥ 0.90 auto, 0.80–0.90 queued as
+`review.json`), with accessory variants kept as separate SKUs, stage
+reconciliation for media samples, and flags for stage regressions. Artifacts:
+`outputs/daily_v2/mentions/*.json`, `products.json`, `review.json`,
+`summary.json`.
+
 ## Artifact layout
 
 ```text
