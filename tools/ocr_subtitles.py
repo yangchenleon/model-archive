@@ -100,6 +100,63 @@ def keep_subtitle_box(box, gray: "np.ndarray", min_white: float = 0.2, min_aspec
     return float((roi > 200).mean()) >= min_white
 
 
+SUB_RULES = [
+    (re.compile(r"[\u4e00-\u9fff]长大陆"), "酋长大陆"),          # 酋 is a hard glyph for OCR
+    (re.compile(r"(?<=[\u4e00-\u9fff])7(?=[\u4e00-\u9fff])"), "了"),  # 了 often read as 7
+    (re.compile("终干"), "终于"),
+    (re.compile("处干"), "处于"),
+    (re.compile("查接"), "直接"),
+    (re.compile("哪介"), "哪个"),
+]
+
+
+def postprocess(text: str) -> str:
+    """Font-specific fixes that are safe to apply unconditionally."""
+    for pattern, replacement in SUB_RULES:
+        text = pattern.sub(replacement, text)
+    return text
+
+
+def _mean_y(box: Any) -> float:
+    return sum(point[1] for point in box) / len(box)
+
+
+def _min_x(box: Any) -> float:
+    return min(point[0] for point in box)
+
+
+def group_lines(boxes: list[Any], tolerance: float = 40.0) -> list[list[Any]]:
+    """Cluster detection boxes into visual lines, ordered top-to-bottom."""
+    lines: list[list[Any]] = []
+    for box in sorted(boxes, key=_mean_y):
+        if lines and abs(_mean_y(box) - _mean_y(lines[-1][0])) <= tolerance:
+            lines[-1].append(box)
+        else:
+            lines.append([box])
+    return [sorted(line, key=_min_x) for line in lines]
+
+
+def read_line_crop(image: "np.ndarray", engine: RapidOCR, boxes: list[Any], pad: int = 8) -> tuple[str, float]:
+    """Recognise a whole visual line once instead of concatenating segments.
+
+    An emphasised word can be rendered larger, splitting one subtitle into
+    several boxes; recognising the union crop keeps the natural left-to-right
+    text and avoids per-segment misreads.
+    """
+    xs = [point[0] for box in boxes for point in box]
+    ys = [point[1] for box in boxes for point in box]
+    x0, y0 = max(0, int(min(xs)) - pad), max(0, int(min(ys)) - pad)
+    x1, y1 = int(max(xs)) + pad, int(max(ys)) + pad
+    crop = image[y0:y1, x0:x1]
+    if crop.size == 0:
+        return "", 0.0
+    result, _ = engine(crop, use_det=False, use_cls=False, use_rec=True)
+    if not result:
+        return "", 0.0
+    best = max(result, key=lambda item: float(item[-1]))
+    return best[0], float(best[-1])
+
+
 def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score: float, use_det: bool) -> tuple[list[tuple[str, float]], int]:
     """OCR the frames whose band changed; returns (texts, ocr_calls)."""
     texts: list[tuple[str, float]] = []
@@ -107,11 +164,12 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
     last_text, last_score = "", 0.0
     calls = 0
     for frame in frames:
-        image = cv2.imread(str(frame), cv2.IMREAD_GRAYSCALE)
+        image = cv2.imread(str(frame))
         if image is None:
             texts.append((last_text, last_score))
             continue
-        thumb = cv2.resize(image, (128, 16), interpolation=cv2.INTER_AREA)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        thumb = cv2.resize(gray, (128, 16), interpolation=cv2.INTER_AREA)
         changed = previous is None or float(np.mean(cv2.absdiff(previous, thumb))) > threshold
         previous = thumb
         if not changed:
@@ -120,13 +178,15 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
         calls += 1
         if use_det:
             result, _ = engine(str(frame))
-            # two-line subtitles can come back bottom-first; restore reading order
-            ordered = order_boxes(result or [])
-            lines = [
-                (text, score)
-                for box, text, score in ordered
-                if score >= min_score and keep_subtitle_box(box, image)
+            boxes = [
+                item[0] for item in (result or [])
+                if item[2] >= min_score and keep_subtitle_box(item[0], gray)
             ]
+            lines = []
+            for line in group_lines(boxes):
+                text, score = read_line_crop(image, engine, line)
+                if text and score >= min_score:
+                    lines.append((text, score))
         else:
             result, _ = engine(str(frame), use_det=False, use_cls=False, use_rec=True)
             lines = []
@@ -134,7 +194,7 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
                 text, score = item[0], float(item[-1])
                 if score >= min_score:
                     lines.append((text, score))
-        last_text = norm_text("".join(text for text, _ in lines))
+        last_text = "，".join(postprocess(norm_text(text)) for text, _ in lines)
         last_score = min((score for _, score in lines), default=0.0)
         texts.append((last_text, last_score))
     return texts, calls
@@ -310,7 +370,7 @@ def read_subtitles(
         "ocr_calls": calls,
         "cue_count": len(cues),
         "cues": cues,
-        "text": "".join(cue["text"] for cue in cues),
+        "text": "，".join(cue["text"] for cue in cues),
     }
 
 
@@ -410,7 +470,6 @@ def main() -> None:
     parser.add_argument("--start-date", default="00000000")
     parser.add_argument("--end-date", default="99999999")
     parser.add_argument("--fps", type=float, default=2.0)
-    parser.add_argument("--use-det", action="store_true", help="Full detection (handles wrapped lines, slower)")
     parser.add_argument("--mode", choices=["band", "rows", "det"], default="band",
                         help="band=fast fixed crop, rows=outline-based line split, det=full detection")
     parser.add_argument("--check", action="store_true", help="Audit existing subtitle JSONs instead of OCR")
@@ -422,7 +481,7 @@ def main() -> None:
         return
 
     if args.video:
-        payload = read_subtitles(args.video, fps=args.fps, use_det=args.use_det, mode=args.mode, engine=make_engine(args.mode))
+        payload = read_subtitles(args.video, fps=args.fps, mode=args.mode, engine=make_engine(args.mode))
         target = args.output or Path("outputs/daily_v2/subtitles") / f"{args.video.stem}.json"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
