@@ -39,6 +39,17 @@ def norm(text: str) -> str:
     return PUNCT.sub("", text)
 
 
+BRAND_SUFFIXES = ("工作室", "模型", "模玩", "工坊", "科技", "工业", "玩具", "公司")
+
+
+def normalize_brand(name: str) -> str:
+    key = norm(name)
+    for suffix in BRAND_SUFFIXES:
+        if key.endswith(suffix) and len(key) > len(suffix):
+            key = key[: -len(suffix)]
+    return key
+
+
 def display_stage(status: str) -> tuple[str, str]:
     for stage, words in STAGE_HINTS:
         if any(word in status for word in words):
@@ -76,7 +87,7 @@ def main() -> None:
     rows = load_mentions(args.mentions_dir, args.start_date, args.end_date)
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        groups[(norm(row["brand"]), norm(row["product"]))].append(row)
+        groups[(normalize_brand(row["brand"]), norm(row["product"]))].append(row)
 
     products: list[dict[str, Any]] = []
     for index, ((brand_key, product_key), mentions) in enumerate(
