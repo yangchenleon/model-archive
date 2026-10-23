@@ -39,7 +39,7 @@ def norm(text: str) -> str:
     return PUNCT.sub("", text)
 
 
-BRAND_SUFFIXES = ("工作室", "模型", "模玩", "工坊", "科技", "工业", "玩具", "公司")
+BRAND_SUFFIXES = ("工作室", "模型", "模玩", "工坊", "科技", "工业", "玩具", "公司", "配件包")
 
 
 def normalize_brand(name: str) -> str:
@@ -137,7 +137,6 @@ def main() -> None:
                 "evidence": row.get("evidence", ""),
                 "video_id": row["video_id"],
                 "start": row.get("time"),
-                "confidence": row.get("confidence", 0.8),
             })
         products.append({
             "id": f"Q{index:04d}",

@@ -26,10 +26,12 @@ PROMPT = """你是模玩（拼装模型、成品机甲、可动人偶、特摄�
 - GK 是一种套件类型，不是厂牌，不要放进 brand。
 - "新厂""某厂""某工作室"未具名时，brand 留空，不要臆造。
 - "B社/代哥/万代" 指同一家厂商；"国服/日系" 不是厂商。
+- 大林/大林模型 以配件包为主："大林配件包"里"配件包"是产品类型，brand 应为"大林"。
+- 第X弹、第X系列属于批次/系列，放 line，不要放 variant。
 
 每个条目输出：
 - brand：厂商名，只填厂商；空则留空字符串
-- line：产品线/规格（MG、RG、PGU、MGSD、1比60拼装、超动骑兵系列…），没有就留空
+- line：产品线/规格/批次（MG、RG、PGU、MGSD、1比60拼装、超动骑兵系列、第二弹…），没有就留空
 - product：产品基础名称（机体/角色/型号），只保留名词，不含版本词和动词
 - variant：版本/配色/换色/限定/套装等修饰（电镀银、海涅配色、进阶装、PB限定、战损配件包…），没有就留空
 - status：产品当前生命周期状态，只能取以下值之一
@@ -39,21 +41,21 @@ PROMPT = """你是模玩（拼装模型、成品机甲、可动人偶、特摄�
 - price：价格，只保留数字和单位，没有就留空
 - detail：其他描述性信息（测评、延期、配件、玩法、价格波动、评价等），不要塞进上面任何字段
 - evidence：支撑该条目的原文片段，不超过 40 字
-- confidence：0-1
 
 规则：
 1. 只提取具体产品，不提取品牌动态、市场评论、纯个人感受。
 2. 同一产品在同一条文本里多次出现，合并成一条。
 3. product 必须是纯名词短语，不含动词、感叹、状态词；版本/配色一律进 variant。
 4. brand 与 product 边界要清楚：厂商名只出现在 brand，系列名只出现在 line。
-5. status 只能从枚举里选；拿不准选 unknown。
+5. status 只能从枚举里选；拿不准选 unknown。若本条只是延期/测评/价格变动，status 按产品当前阶段判断，
+   判断不了选 unknown，不要用 reprint 代替"修复"。
 6. 不确定就留空，不要猜测。
 7. 福利/抽奖/掉落/赠品内容不是产品资讯：出现"掉落""抽奖""福利""赠送""开奖""上车""粉丝福利"等词的段落，
    整段不要提取；"包含了 A、B、C"这种罗列通常是赠品清单，也不要拆成产品条目。
 8. 广告/带货/店铺引流（"XX 家上新""链接在橱窗"等）同样不提取。
 
 只返回纯 JSON：
-{"items": [{"brand": "", "line": "", "product": "", "variant": "", "status": "unknown", "price": "", "detail": "", "evidence": "", "confidence": 0.0}]}
+{"items": [{"brand": "", "line": "", "product": "", "variant": "", "status": "unknown", "price": "", "detail": "", "evidence": ""}]}
 
 视频日期：@@DATE@@
 字幕文本：
@@ -77,10 +79,6 @@ def clean_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
         product = str(raw.get("product") or "").strip()
         if not brand or not product:
             continue
-        try:
-            confidence = float(raw.get("confidence", 0.8))
-        except (TypeError, ValueError):
-            confidence = 0.8
         cleaned.append({
             "brand": brand,
             "line": str(raw.get("line") or "").strip(),
@@ -90,7 +88,6 @@ def clean_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "price": str(raw.get("price") or "").strip(),
             "detail": str(raw.get("detail") or "").strip()[:200],
             "evidence": str(raw.get("evidence") or "").strip()[:120],
-            "confidence": max(0.0, min(1.0, confidence)),
         })
     return cleaned
 
