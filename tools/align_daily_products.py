@@ -89,22 +89,33 @@ def load_mentions(directory: Path, start: str, end: str) -> list[dict[str, Any]]
     return rows
 
 
+def load_aliases(path: Path) -> dict[tuple[str, str], str]:
+    """Confirmed aliases: (brand key, observed product key) -> canonical product key."""
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        (normalize_brand(entry["brand"]), norm(entry["from"])): norm(entry["to"])
+        for entry in payload.get("aliases", [])
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mentions-dir", type=Path, default=Path("outputs/daily_v2/v3/mentions"))
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/daily_v2/v3"))
+    parser.add_argument("--alias-file", type=Path, default=Path("outputs/daily_v2/alias.json"))
     parser.add_argument("--start-date", default="00000000")
     parser.add_argument("--end-date", default="99999999")
     args = parser.parse_args()
 
     rows = load_mentions(args.mentions_dir, args.start_date, args.end_date)
+    aliases = load_aliases(args.alias_file)
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        groups[(
-            normalize_brand(row["brand"]),
-            norm(row["product"]),
-            norm(row.get("variant", "")),
-        )].append(row)
+        brand_key = normalize_brand(row["brand"])
+        product_key = aliases.get((brand_key, norm(row["product"])), norm(row["product"]))
+        groups[(brand_key, product_key, norm(row.get("variant", "")))].append(row)
 
     products: list[dict[str, Any]] = []
     for index, ((brand_key, product_key, variant_key), mentions) in enumerate(

@@ -136,34 +136,39 @@ have a report, keeps going after a failure, and records progress in
 Re-running the same command retries only the folders that are still missing a
 report, so `--start-date`/`--end-date` narrow it down to a date range.
 
-## Daily report v2: mentions and product alignment
+## Product extraction and alignment (current standard)
 
-The v1 report (`extract_daily_news`) emits one free-form `news_type` per item,
-which cannot answer "how did this product move from announcement to shelf".
-The v2 pair replaces the post-ASR stage with an event-sourced design:
+The current pipeline for 嘟嘟模玩 is: burned-in subtitle OCR → product extraction →
+exact-match alignment → HTML timeline. Design details and the maintenance
+workflow live in [docs/product-pipeline.md](../docs/product-pipeline.md).
 
 ```bash
-.venv-tools/bin/python -m tools.extract_daily_mentions \
+# 1) extract products from OCR subtitles
+.venv-tools/bin/python -m tools.extract_daily_products \
   --start-date 20260823 --end-date 20260922
 
-.venv-tools/bin/python -m tools.align_daily_mentions
+# 2) group by exact identity (no similarity merging)
+.venv-tools/bin/python -m tools.align_daily_products \
+  --mentions-dir outputs/daily_v2/v3/mentions \
+  --output-dir outputs/daily_v2/v3_31d \
+  --start-date 20260823 --end-date 20260922
+
+# 3) render the timeline
+.venv-tools/bin/python -m tools.render_product_timeline \
+  --products outputs/daily_v2/v3_31d/products.json \
+  --output outputs/daily_v2/v3_31d/timeline.html
 ```
 
-`extract_daily_mentions` turns each transcript into atomic mentions with a
-controlled `stage` (rumor → teaser → announced → preorder → released →
-reprint/discontinued), an orthogonal `event` (price_change, delay, review,
-accessory, payment, expo, recall, info_update), and a split identity
-(`brand` / `line` / `model_name` / `variant`). Every mention also carries the
-verbatim `stage_cue` that justified the stage.
+`extract_daily_products` asks the model for `brand / line / product / variant /
+status / price / detail / evidence`, with `status` constrained to the lifecycle
+enum (rumor → teaser → announced → preorder → released → reprint/discontinued).
+The prompt excludes giveaways/ads, keeps batch numbers in `line`, and rejects
+`GK`/“新厂” as manufacturer names.
 
-`align_daily_mentions` folds mentions into product entities and keeps the full
-timeline, so the product directory stays one row per product while every
-pre-release update is auditable. Matching is exact key first
-(brand + grade + normalized name), then fuzzy (≥ 0.90 auto, 0.80–0.90 queued as
-`review.json`), with accessory variants kept as separate SKUs, stage
-reconciliation for media samples, and flags for stage regressions. Artifacts:
-`outputs/daily_v2/mentions/*.json`, `products.json`, `review.json`,
-`summary.json`.
+`align_daily_products` groups mentions by `(brand, product, variant)` after
+deterministic normalization (brand suffixes, scale tokens, punctuation) and
+loads confirmed aliases from `outputs/daily_v2/alias.json`. There is **no
+similarity or prefix merging**: look-alikes are only listed in `review.json`.
 
 ## Burned-in subtitles: OCR with timestamps
 

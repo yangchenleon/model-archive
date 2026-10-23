@@ -4,8 +4,8 @@
 1920×1080，底部烧录白色黑边硬字幕，因此可以用画面字幕 OCR 替代 ASR：文本更准，
 并且每条字幕自带时间戳，可直接映射回原视频时间点。
 
-> 本文只覆盖「视频 → 字幕文本/时间戳」这一段。后续的 mention 抽取与产品对齐见
-> `tools/extract_daily_mentions.py`、`tools/align_daily_mentions.py`。
+> 本文只覆盖「视频 → 字幕文本/时间戳」这一段。后续的产品抽取与对齐见
+> [product-pipeline.md](product-pipeline.md)。
 
 ## 1. 流程总览
 
