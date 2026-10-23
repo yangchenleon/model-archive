@@ -50,6 +50,17 @@ def normalize_brand(name: str) -> str:
     return key
 
 
+GRADE_PREFIX = re.compile(r"^(PGU|MGSD|MGEX|MG|RG|HG|PG|FM|RE|SD|TV)(?=[一-鿿])")
+
+
+def normalize_product(product: str, line: str) -> tuple[str, str]:
+    """Move a scale token that leaked into product back to line (deterministic)."""
+    match = GRADE_PREFIX.match(product or "")
+    if not match:
+        return product, line
+    return product[match.end():], line or match.group(1)
+
+
 def display_stage(status: str) -> tuple[str, str]:
     for stage, words in STAGE_HINTS:
         if any(word in status for word in words):
@@ -72,7 +83,9 @@ def load_mentions(directory: Path, start: str, end: str) -> list[dict[str, Any]]
         if not (start <= payload["date"] <= end):
             continue
         for item in payload.get("items", []):
-            rows.append({**item, "date": payload["date"], "video_id": payload["video_id"]})
+            product, line = normalize_product(item.get("product", ""), item.get("line", ""))
+            rows.append({**item, "product": product, "line": line,
+                         "date": payload["date"], "video_id": payload["video_id"]})
     return rows
 
 
