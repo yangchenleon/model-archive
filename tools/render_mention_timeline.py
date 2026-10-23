@@ -46,7 +46,7 @@ def stage_dot(entry: dict[str, Any]) -> str:
     return link
 
 
-def render(products: list[dict[str, Any]], review: list[dict[str, Any]], title: str) -> str:
+def render(products: list[dict[str, Any]], review: list[dict[str, Any]], title: str, min_mentions: int = 2) -> str:
     all_dates = [parse_date(e["date"]) for p in products for e in p["timeline"]]
     start, end = (min(all_dates), max(all_dates)) if all_dates else (datetime.date.today(), datetime.date.today())
     span = max(1, (end - start).days)
@@ -55,7 +55,7 @@ def render(products: list[dict[str, Any]], review: list[dict[str, Any]], title: 
 
     rows = []
     for product in sorted(products, key=lambda p: (-p["mention_count"], p["brand"], p["model_name"])):
-        if product["mention_count"] < 2:
+        if product["mention_count"] < min_mentions:
             continue
         dots = []
         for entry in product["timeline"]:
@@ -122,13 +122,14 @@ def main() -> None:
     parser.add_argument("--review", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=Path("outputs/daily_v2/timeline.html"))
     parser.add_argument("--title", default="模玩速报 · 产品时间线")
+    parser.add_argument("--min-mentions", type=int, default=2, help="Only render products with at least N mentions")
     args = parser.parse_args()
 
     products = json.loads(args.products.read_text(encoding="utf-8"))
     review_path = args.review or args.products.with_name("review.json")
     review = json.loads(review_path.read_text(encoding="utf-8")) if review_path.exists() else []
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(render(products, review, args.title), encoding="utf-8")
+    args.output.write_text(render(products, review, args.title, args.min_mentions), encoding="utf-8")
     print(f"written {args.output} ({len(products)} products)")
 
 
