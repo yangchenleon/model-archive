@@ -157,8 +157,27 @@ def canonical_brands(rows: list[dict[str, Any]]) -> dict[str, str]:
     return resolved
 
 
-def align(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
+CHANNEL_VARIANTS = ("pb限定", "会场限定", "场限", "抽选", "先行", "限定版", "特典", "福袋")
+VARIANT_TOKEN = re.compile(r"([0-9一二三四五六七八九十]+型|[0-9一二三四五六七八九十]+号机|mk-?\d+|ver\.?\d+|[ⅠⅡⅢⅣⅤⅥⅦ])")
+
+
+def variant_token_diff(a: str, b: str) -> bool:
+    """«XXX-1型» and «XXX-2型» look identical to a string metric but are different SKUs."""
+    ta, tb = set(VARIANT_TOKEN.findall(a)), set(VARIANT_TOKEN.findall(b))
+    return bool(ta and tb and ta != tb)
+
+
+def load_aliases(path: Path) -> dict[tuple[str, str], str]:
+    """Confirmed aliases: (brand, observed key) -> canonical key."""
+    if not path.exists():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return {(entry["brand"], norm(entry["from"])): norm(entry["to"]) for entry in payload.get("aliases", [])}
+
+
+def align(rows: list[dict[str, Any]], alias_path: Path | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
     brand_map = canonical_brands(rows)
+    aliases = load_aliases(alias_path) if alias_path else {}
     products: list[dict[str, Any]] = []
     review: list[dict[str, Any]] = []
     exact: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -166,7 +185,13 @@ def align(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[s
     for row in rows:
         brand = brand_map.get(row["brand"], row["brand"])
         grade = grade_of(row["line"], row["model_name"])
-        key_text = name_key(row["model_name"])
+        # treat name+variant as the full product name, except pure sales-channel
+        # qualifiers (PB限定/场限/特典 …) which do not change the SKU
+        full_name = row["model_name"]
+        if row["variant"] and not any(hint in norm(row["variant"]) for hint in CHANNEL_VARIANTS):
+            full_name = full_name + row["variant"]
+        key_text = name_key(full_name)
+        key_text = aliases.get((brand, key_text), key_text)
         accessory = bool(row["variant"]) and any(hint in norm(row["variant"]) for hint in ACCESSORY_HINTS)
         if row["event"] == "accessory" and not accessory:
             accessory = True
@@ -186,8 +211,12 @@ def align(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[s
                     continue
                 if candidate["grade"] and grade and candidate["grade"] != grade:
                     continue
+                if variant_token_diff(key_text, candidate["name_key"]):
+                    continue
                 score = similarity(candidate["name_key"], key_text)
-                if score >= 0.90 and (best is None or score > best[1]):
+                shorter, longer = sorted((candidate["name_key"], key_text), key=len)
+                prefix_same = shorter in longer and len(longer) - len(shorter) <= 4
+                if (score >= 0.90 or prefix_same) and (best is None or score > best[1]):
                     best = (candidate, score)
             if best:
                 product, score = best
@@ -198,6 +227,8 @@ def align(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[s
                     if candidate["brand"] != brand or candidate.get("accessory") != accessory:
                         continue
                     if candidate["grade"] and grade and candidate["grade"] != grade:
+                        continue
+                    if variant_token_diff(key_text, candidate["name_key"]):
                         continue
                     score = similarity(candidate["name_key"], key_text)
                     if 0.80 <= score < 0.90:
@@ -312,7 +343,7 @@ def main() -> None:
     args = parser.parse_args()
 
     rows = load_mentions(args.mentions_dir, args.start_date, args.end_date)
-    products, review, brand_map = align(rows)
+    products, review, brand_map = align(rows, alias_path=Path("outputs/daily_v2/alias.json"))
     multi = [p for p in products if p["mention_count"] > 1]
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
