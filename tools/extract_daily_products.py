@@ -22,22 +22,24 @@ load_env()
 PROMPT = """你是信息提取器。从下面的视频字幕文本中，提取所有被提到的"产品条目"。
 
 每个条目输出以下字段：
-- brand：厂商/品牌名称（按原文，不要补全或改写）
-- product：产品的完整名称（按原文，包含型号、版本、配色、套装等后缀，不要拆分、不要省略）
-- status：这次提到的动态，用原文短语（例如"新品公布""开启预售""现货发售""价格跳水""延期""测评"）
-- price：原文提到的价格（没有就留空字符串）
-- release_date：原文提到的发售/出货时间（没有就留空字符串）
+- brand：厂商/品牌，只填空厂商名；不要把产品名、系列名、配件名混进来
+- line：产品系列/产品线（如 MG、RG、某系列），没有就留空
+- product：产品名称，只保留名词短语；去掉"带来/登场/更新/公布/预售/测评/亮相"等动词和状态词，去掉系列前缀；保留型号、版本、配色、套装等修饰词
+- status：这次提到的动作，只写动作短语（如"新品公布""开启预售""现货发售""价格跳水""延期"），不要把价格和时间混进来
+- price：价格，只保留数字和单位，没有就留空
+- release_date：发售/出货时间，只保留时间表达，没有就留空
 - evidence：支撑该条目的原文片段，不超过 40 字
 - confidence：0-1，名称或信息不清晰时降低
 
 规则：
 1. 只提取具体的产品实体，不提取品牌动态、市场评论、个人感受。
 2. 同一产品在同一条文本里多次出现，合并成一条。
-3. 名称一律保留原文用词，不要改写、不要归纳、不要翻译。
-4. 不确定就留空，不要猜测。
+3. product 必须是纯名词短语，不要句子、不要动词、不要口语感叹。
+4. brand 与 product 的边界要分清：厂商名只出现在 brand，系列名只出现在 line。
+5. 不确定就留空，不要猜测。
 
 只返回纯 JSON：
-{"items": [{"brand": "", "product": "", "status": "", "price": "", "release_date": "", "evidence": "", "confidence": 0.0}]}
+{"items": [{"brand": "", "line": "", "product": "", "status": "", "price": "", "release_date": "", "evidence": "", "confidence": 0.0}]}
 
 视频日期：@@DATE@@
 字幕文本：
@@ -67,6 +69,7 @@ def clean_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
             confidence = 0.8
         cleaned.append({
             "brand": brand,
+            "line": str(raw.get("line") or "").strip(),
             "product": product,
             "status": str(raw.get("status") or "").strip(),
             "price": str(raw.get("price") or "").strip(),
