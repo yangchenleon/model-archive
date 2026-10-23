@@ -19,27 +19,38 @@ from tools.extract_daily_news import call_llm_json
 
 load_env()
 
-PROMPT = """你是信息提取器。从下面的视频字幕文本中，提取所有被提到的"产品条目"。
+PROMPT = """你是模玩（拼装模型、成品机甲、可动人偶、特摄周边）资讯的信息提取器。
+输入是 B 站模玩速报视频的字幕文本，口播里常有同音错别字，请结合上下文纠正名称，但不要改变产品身份。
 
-每个条目输出以下字段：
-- brand：厂商/品牌，只填空厂商名；不要把产品名、系列名、配件名混进来
-- line：产品系列/产品线（如 MG、RG、某系列），没有就留空
-- product：产品名称，只保留名词短语；去掉"带来/登场/更新/公布/预售/测评/亮相"等动词和状态词，去掉系列前缀；保留型号、版本、配色、套装等修饰词
-- status：这次提到的动作，只写动作短语（如"新品公布""开启预售""现货发售""价格跳水""延期"），不要把价格和时间混进来
+背景常识：
+- GK 是一种套件类型，不是厂牌，不要放进 brand。
+- "新厂""某厂""某工作室"未具名时，brand 留空，不要臆造。
+- "B社/代哥/万代" 指同一家厂商；"国服/日系" 不是厂商。
+
+每个条目输出：
+- brand：厂商名，只填厂商；空则留空字符串
+- line：产品线/规格（MG、RG、PGU、MGSD、1比60拼装、超动骑兵系列…），没有就留空
+- product：产品基础名称（机体/角色/型号），只保留名词，不含版本词和动词
+- variant：版本/配色/换色/限定/套装等修饰（电镀银、海涅配色、进阶装、PB限定、战损配件包…），没有就留空
+- status：产品当前生命周期状态，只能取以下值之一
+  rumor（传闻/爆料）、teaser（灰模/试模/剪影/官图）、announced（公布/解禁/登场）、
+  preorder（预售/开订/定金/先行）、released（现货/大货/发售/上线）、
+  reprint（再版/复刻）、discontinued（停产/停售）、unknown
 - price：价格，只保留数字和单位，没有就留空
-- release_date：发售/出货时间，只保留时间表达，没有就留空
+- detail：其他描述性信息（测评、延期、配件、玩法、价格波动、评价等），不要塞进上面任何字段
 - evidence：支撑该条目的原文片段，不超过 40 字
-- confidence：0-1，名称或信息不清晰时降低
+- confidence：0-1
 
 规则：
-1. 只提取具体的产品实体，不提取品牌动态、市场评论、个人感受。
+1. 只提取具体产品，不提取品牌动态、市场评论、纯个人感受。
 2. 同一产品在同一条文本里多次出现，合并成一条。
-3. product 必须是纯名词短语，不要句子、不要动词、不要口语感叹。
-4. brand 与 product 的边界要分清：厂商名只出现在 brand，系列名只出现在 line。
-5. 不确定就留空，不要猜测。
+3. product 必须是纯名词短语，不含动词、感叹、状态词；版本/配色一律进 variant。
+4. brand 与 product 边界要清楚：厂商名只出现在 brand，系列名只出现在 line。
+5. status 只能从枚举里选；拿不准选 unknown。
+6. 不确定就留空，不要猜测。
 
 只返回纯 JSON：
-{"items": [{"brand": "", "line": "", "product": "", "status": "", "price": "", "release_date": "", "evidence": "", "confidence": 0.0}]}
+{"items": [{"brand": "", "line": "", "product": "", "variant": "", "status": "unknown", "price": "", "detail": "", "evidence": "", "confidence": 0.0}]}
 
 视频日期：@@DATE@@
 字幕文本：
@@ -71,9 +82,10 @@ def clean_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "brand": brand,
             "line": str(raw.get("line") or "").strip(),
             "product": product,
-            "status": str(raw.get("status") or "").strip(),
+            "variant": str(raw.get("variant") or "").strip(),
+            "status": str(raw.get("status") or "unknown").strip().lower(),
             "price": str(raw.get("price") or "").strip(),
-            "release_date": str(raw.get("release_date") or "").strip(),
+            "detail": str(raw.get("detail") or "").strip()[:200],
             "evidence": str(raw.get("evidence") or "").strip()[:120],
             "confidence": max(0.0, min(1.0, confidence)),
         })

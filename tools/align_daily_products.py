@@ -85,26 +85,42 @@ def main() -> None:
     args = parser.parse_args()
 
     rows = load_mentions(args.mentions_dir, args.start_date, args.end_date)
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
-        groups[(normalize_brand(row["brand"]), norm(row["product"]))].append(row)
+        groups[(
+            normalize_brand(row["brand"]),
+            norm(row["product"]),
+            norm(row.get("variant", "")),
+        )].append(row)
 
     products: list[dict[str, Any]] = []
-    for index, ((brand_key, product_key), mentions) in enumerate(
-        sorted(groups.items(), key=lambda item: (item[0][0], item[0][1])), 1
+    for index, ((brand_key, product_key, variant_key), mentions) in enumerate(
+        sorted(groups.items(), key=lambda item: (item[0][0], item[0][1], item[0][2])), 1
     ):
         mentions.sort(key=lambda row: row["date"])
         timeline = []
         for row in mentions:
-            stage, event = display_stage(row.get("status", ""))
+            status = row.get("status", "") or "unknown"
+            stage, event = display_stage(status)
+            if stage == "unknown" and status in ("rumor", "teaser", "announced", "preorder",
+                                                 "released", "reprint", "discontinued"):
+                stage = status
+            detail = row.get("detail", "")
+            if any(word in detail for word in ("跳水", "涨价", "降价", "价格调整")):
+                event = "price_change"
+            elif "延期" in detail:
+                event = "delay"
+            elif "测评" in detail or "开箱" in detail:
+                event = "review"
             timeline.append({
                 "date": row["date"],
                 "stage": stage,
                 "event": event,
                 "stage_cue": row.get("status", ""),
                 "price": row.get("price", ""),
-                "release_date": row.get("release_date", ""),
-                "variant": "",
+                "release_date": "",
+                "variant": row.get("variant", ""),
+                "detail": detail,
                 "evidence": row.get("evidence", ""),
                 "video_id": row["video_id"],
                 "start": row.get("time"),
@@ -114,8 +130,9 @@ def main() -> None:
             "id": f"Q{index:04d}",
             "brand": mentions[0]["brand"],
             "model_name": mentions[0]["product"],
+            "line": mentions[0].get("line", ""),
             "name_key": product_key,
-            "variants": [],
+            "variants": sorted({row.get("variant", "") for row in mentions if row.get("variant")}),
             "mention_count": len(mentions),
             "timeline": timeline,
             "current_stage": timeline[-1]["stage"] if timeline else "unknown",
