@@ -167,6 +167,9 @@ reconciliation for media samples, and flags for stage regressions. Artifacts:
 
 ## Burned-in subtitles: OCR with timestamps
 
+The concrete settings for 嘟嘟模玩 (thresholds, filters, rerun checklist,
+known pitfalls) live in [docs/doudou-ocr-pipeline.md](../docs/doudou-ocr-pipeline.md).
+
 Some reviewers burn subtitles into the frame (verified on 嘟嘟模玩). OCR of the
 subtitle band yields text that is complementary to ASR and, unlike the 60-second
 ASR chunks, gives an exact timestamp per line:

@@ -28,7 +28,7 @@ from rapidocr_onnxruntime import RapidOCR
 
 SPACE = re.compile(r"\s+")
 CUE_SIMILARITY = 0.80
-CHANGE_THRESHOLD = 0.08
+CHANGE_THRESHOLD = 0.04
 
 
 def norm_text(text: str) -> str:
@@ -213,14 +213,12 @@ def ocr_frames(
     threshold: float,
     min_score: float,
     use_det: bool,
-    max_gap_frames: int = 0,
 ) -> tuple[list[tuple[str, float]], int]:
     """OCR the frames whose band changed; returns (texts, ocr_calls)."""
     texts: list[tuple[str, float]] = []
     previous = None
     last_text, last_score = "", 0.0
     calls = 0
-    gap = 0
     for frame in frames:
         image = cv2.imread(str(frame))
         if image is None:
@@ -230,17 +228,11 @@ def ocr_frames(
         # compare only the white-text mask: background motion no longer triggers OCR
         mask = (gray > 200).astype(np.uint8)
         signature = (cv2.resize(mask, (96, 12), interpolation=cv2.INTER_AREA) > 0.25).astype(np.uint8)
-        gap += 1
-        changed = (
-            previous is None
-            or float(np.mean(signature != previous)) > threshold
-            or (max_gap_frames and gap >= max_gap_frames)
-        )
+        changed = previous is None or float(np.mean(signature != previous)) > threshold
         previous = signature
         if not changed:
             texts.append((last_text, last_score))
             continue
-        gap = 0
         calls += 1
         if use_det:
             result, _ = engine(str(frame))
@@ -454,10 +446,7 @@ def read_subtitles(
             texts = read_subtitles_rows(frames, engine or RapidOCR(), top, bottom, 0.5)
             calls = len(frames)
         else:
-            texts, calls = ocr_frames(
-                frames, engine or RapidOCR(), threshold, 0.5, use_det,
-                max_gap_frames=max(1, int(fps * 1.5)),
-            )
+            texts, calls = ocr_frames(frames, engine or RapidOCR(), threshold, 0.5, use_det)
         cues = merge_repeats(build_cues(texts, fps))
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -474,7 +463,7 @@ def read_subtitles(
     }
 
 
-def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float, mode: str = "det") -> None:
+def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float, mode: str = "det", threshold: float | None = None) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     engine = make_engine(mode)  # one model load for the whole run
     excluded = set()
@@ -494,7 +483,7 @@ def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float,
         if out_path.exists():
             print(f"{folder.name} 已存在，跳过", flush=True)
             continue
-        payload = read_subtitles(video, fps=fps, engine=engine, mode=mode)
+        payload = read_subtitles(video, fps=fps, engine=engine, mode=mode, threshold=threshold or CHANGE_THRESHOLD)
         out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{folder.name} cues={payload['cue_count']} chars={len(payload['text'])} ocr_calls={payload['ocr_calls']}", flush=True)
 
@@ -574,6 +563,7 @@ def main() -> None:
     parser.add_argument("--start-date", default="00000000")
     parser.add_argument("--end-date", default="99999999")
     parser.add_argument("--fps", type=float, default=4.0)
+    parser.add_argument("--threshold", type=float, default=None, help="Frame-difference threshold")
     parser.add_argument("--mode", choices=["band", "rows", "det"], default="det",
                         help="band=fast fixed crop, rows=outline-based line split, det=full detection")
     parser.add_argument("--check", action="store_true", help="Audit existing subtitle JSONs instead of OCR")
@@ -585,14 +575,15 @@ def main() -> None:
         return
 
     if args.video:
-        payload = read_subtitles(args.video, fps=args.fps, mode=args.mode, engine=make_engine(args.mode))
+        payload = read_subtitles(args.video, fps=args.fps, mode=args.mode, engine=make_engine(args.mode),
+                                 threshold=args.threshold or CHANGE_THRESHOLD)
         target = args.output or Path("outputs/daily_v2/subtitles") / f"{args.video.stem}.json"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{target} cues={payload['cue_count']} chars={len(payload['text'])} ocr_calls={payload['ocr_calls']}")
         return
 
-    batch(args.reports_dir, args.start_date, args.end_date, args.output_dir, args.fps, args.mode)
+    batch(args.reports_dir, args.start_date, args.end_date, args.output_dir, args.fps, args.mode, args.threshold)
 
 
 if __name__ == "__main__":
