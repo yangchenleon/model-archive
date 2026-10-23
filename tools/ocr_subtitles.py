@@ -207,12 +207,20 @@ def read_line_crop(image: "np.ndarray", engine: RapidOCR, boxes: list[Any], pad:
     return best[0], float(best[-1])
 
 
-def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score: float, use_det: bool) -> tuple[list[tuple[str, float]], int]:
+def ocr_frames(
+    frames: list[Path],
+    engine: RapidOCR,
+    threshold: float,
+    min_score: float,
+    use_det: bool,
+    max_gap_frames: int = 0,
+) -> tuple[list[tuple[str, float]], int]:
     """OCR the frames whose band changed; returns (texts, ocr_calls)."""
     texts: list[tuple[str, float]] = []
     previous = None
     last_text, last_score = "", 0.0
     calls = 0
+    gap = 0
     for frame in frames:
         image = cv2.imread(str(frame))
         if image is None:
@@ -222,11 +230,17 @@ def ocr_frames(frames: list[Path], engine: RapidOCR, threshold: float, min_score
         # compare only the white-text mask: background motion no longer triggers OCR
         mask = (gray > 200).astype(np.uint8)
         signature = (cv2.resize(mask, (96, 12), interpolation=cv2.INTER_AREA) > 0.25).astype(np.uint8)
-        changed = previous is None or float(np.mean(signature != previous)) > threshold
+        gap += 1
+        changed = (
+            previous is None
+            or float(np.mean(signature != previous)) > threshold
+            or (max_gap_frames and gap >= max_gap_frames)
+        )
         previous = signature
         if not changed:
             texts.append((last_text, last_score))
             continue
+        gap = 0
         calls += 1
         if use_det:
             result, _ = engine(str(frame))
@@ -440,7 +454,10 @@ def read_subtitles(
             texts = read_subtitles_rows(frames, engine or RapidOCR(), top, bottom, 0.5)
             calls = len(frames)
         else:
-            texts, calls = ocr_frames(frames, engine or RapidOCR(), threshold, 0.5, use_det)
+            texts, calls = ocr_frames(
+                frames, engine or RapidOCR(), threshold, 0.5, use_det,
+                max_gap_frames=max(1, int(fps * 1.5)),
+            )
         cues = merge_repeats(build_cues(texts, fps))
     finally:
         shutil.rmtree(work, ignore_errors=True)
