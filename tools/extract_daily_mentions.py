@@ -18,6 +18,7 @@ Artifacts: ``<out>/<YYYYMMDD>_<BV>.json`` with the parsed mentions.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import time
@@ -175,6 +176,18 @@ def extract_one(transcript: str, metadata: dict[str, Any], date: str, model: str
     return items
 
 
+def locate_cue(evidence: str, cues: list[dict[str, Any]]) -> tuple[float, float] | None:
+    """Find the subtitle cue that best matches a mention's evidence."""
+    if not evidence or not cues:
+        return None
+    for cue in cues:
+        if evidence[:8] and evidence[:8] in cue["text"]:
+            return cue["start"], cue["end"]
+    best = max(cues, key=lambda cue: difflib.SequenceMatcher(None, evidence, cue["text"]).ratio())
+    ratio = difflib.SequenceMatcher(None, evidence, best["text"]).ratio()
+    return (best["start"], best["end"]) if ratio >= 0.5 else None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--reports-dir", type=Path, default=Path("outputs/daily_reports"))
@@ -182,6 +195,8 @@ def main() -> None:
     parser.add_argument("--start-date", required=True, help="YYYYMMDD")
     parser.add_argument("--end-date", required=True, help="YYYYMMDD")
     parser.add_argument("--model", help="LLM model override")
+    parser.add_argument("--source", choices=["asr", "ocr"], default="asr")
+    parser.add_argument("--subtitles-dir", type=Path, default=Path("outputs/daily_v2/subtitles"))
     parser.add_argument("--limit", type=int)
     parser.add_argument("--sleep", type=float, default=1.0)
     parser.add_argument("--force", action="store_true")
@@ -208,14 +223,29 @@ def main() -> None:
         if out_path.exists() and not args.force:
             print(f"[{index}/{len(days)}] {day} {bvid} 已存在，跳过", flush=True)
             continue
-        transcript_files = sorted((path / "transcript").glob("*.txt"))
         info_files = sorted((path / "video").glob("*.info.json"))
-        if not transcript_files or not info_files:
-            print(f"[{index}/{len(days)}] {day} {bvid} 缺转写或元数据，跳过", flush=True)
+        if not info_files:
+            print(f"[{index}/{len(days)}] {day} {bvid} 缺元数据，跳过", flush=True)
             failures += 1
             continue
-        transcript = transcript_files[0].read_text(encoding="utf-8").strip()
         metadata = json.loads(info_files[0].read_text(encoding="utf-8"))
+        cues: list[dict[str, Any]] = []
+        if args.source == "ocr":
+            sub_path = args.subtitles_dir / f"{day}_{bvid}.json"
+            if not sub_path.exists():
+                print(f"[{index}/{len(days)}] {day} {bvid} 缺 OCR 字幕，跳过", flush=True)
+                failures += 1
+                continue
+            sub_payload = json.loads(sub_path.read_text(encoding="utf-8"))
+            transcript = sub_payload.get("text", "").strip()
+            cues = sub_payload.get("cues") or []
+        else:
+            transcript_files = sorted((path / "transcript").glob("*.txt"))
+            if not transcript_files:
+                print(f"[{index}/{len(days)}] {day} {bvid} 缺转写，跳过", flush=True)
+                failures += 1
+                continue
+            transcript = transcript_files[0].read_text(encoding="utf-8").strip()
         t0 = time.time()
         try:
             items = extract_one(transcript, metadata, day, args.model)
@@ -224,8 +254,15 @@ def main() -> None:
             print(f"[{index}/{len(days)}] {day} {bvid} FAILED: {str(exc)[:200]}", flush=True)
             time.sleep(args.sleep)
             continue
+        if cues:
+            for item in items:
+                span = locate_cue(item.get("evidence", ""), cues)
+                if span:
+                    item["source_time"] = {"start": span[0], "end": span[1]}
+                    item["source_url"] = f"https://www.bilibili.com/video/{bvid}?t={int(span[0])}"
         payload = {
             "date": day,
+            "source": args.source,
             "video_id": bvid,
             "source_video": metadata.get("webpage_url") or f"https://www.bilibili.com/video/{bvid}",
             "title": metadata.get("title") or "",

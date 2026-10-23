@@ -252,6 +252,7 @@ def align(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[s
                 "variant": mention["variant"],
                 "evidence": mention["evidence"],
                 "video_id": mention["video_id"],
+                "start": (mention.get("source_time") or {}).get("start"),
                 "confidence": mention["confidence"],
             })
         product["timeline"] = timeline
