@@ -83,14 +83,17 @@ OCR 模式下用 `evidence` 在字幕 cues 里做子串/相似度匹配，回填
 `tools/align_daily_mentions.py`：
 
 1. **品牌规范化**：去标点空格、剥掉「模型/模玩/工作室/工坊/科技」等后缀，再做模糊合并（≥0.85）；少量固定别名（SOPA/SUPA/SOFA 等）走 `BRAND_SEED`
-2. **名称归一化**：NFKC、去标点、去掉规格词（MG/RG/PGU/MGSD/1:100…），规格单独作为 `grade` 参与键
-3. **精确键**：`(品牌, grade, 归一化名)`
-4. **别名**：历史确认过的写法直接命中
-5. **模糊**：同品牌、grade 不冲突、名称相似度 ≥0.90 → 自动合并；0.80–0.90 → 进 `review.json`
-6. **配件/套装**：`variant` 含「配件包/套装/特典/外甲/改件/头雕/战损…」或 `event=accessory` → 视为独立 SKU，不并进本体
-7. **阶段对账**：`reconcile_stage` 把“测评/开箱”但无“大货/现货”字样的 released 降回 announced；保留 `stage_raw` 供审计
-8. **投影**：`current_stage` 取所有 `event=none` 提及里最靠后的阶段（单调，不回退）
-9. **异常标记**：`stage_regression`（纯阶段提及倒退）、`price_before_release`、`same_day_variants`
+2. **完整名 = name + variant**：变体参与产品名匹配；纯销售渠道后缀（PB限定/场限/特典/福袋…）不改变 SKU，匹配前剥掉
+3. **名称归一化**：NFKC、去标点、去掉规格词（MG/RG/PGU/MGSD/1:100…），规格单独作为 `grade` 参与键
+4. **精确键**：`(品牌, grade, 归一化完整名)`
+5. **型号守卫**：两边都带型号/序号（`1型`、`2号机`、`Mk-II`、`ver.2`、`Ⅱ`）且不同 → 无论相似度多高都不合并
+6. **前缀规则**：一方是另一方的前缀且只多 ≤4 字（如「诺姆」vs「诺姆量产机型」）→ 合并
+7. **别名表**：`outputs/daily_v2/alias.json` 里人工确认的 `(品牌, 写法) -> 规范写法` 优先于上述规则
+8. **模糊**：同品牌、grade 不冲突、完整名相似度 ≥0.90 → 自动合并；0.80–0.90 → 进 `review.json`
+9. **配件/套装**：`variant` 含「配件包/套装/特典/外甲/改件/头雕/战损…」或 `event=accessory` → 视为独立 SKU，不并进本体
+10. **阶段对账**：`reconcile_stage` 把“测评/开箱”但无“大货/现货”字样的 released 降回 announced；保留 `stage_raw` 供审计
+11. **投影**：`current_stage` 取所有 `event=none` 提及里最靠后的阶段（单调，不回退）
+12. **异常标记**：`stage_regression`（纯阶段提及倒退）、`price_before_release`、`same_day_variants`
 
 输出：
 
@@ -126,9 +129,29 @@ outputs/daily_v2/summary.json    # 统计
   （0823 预售 78 → 0910 现货 → 0916–0918 价格变动 → 0920 价格战），并自动标出一次
   `stage_regression`
 
-## 6. 已知局限
+## 6. 别名表
+
+`outputs/daily_v2/alias.json` 记录人工确认的写法映射，对齐时**优先于**精确键与相似度：
+
+```json
+{
+  "aliases": [
+    {"brand": "魔火工作室", "from": "深渊骑士", "to": "深渊骑士天启", "note": "同款不同写法"}
+  ],
+  "negative": [
+    {"brand": "XX", "from": "牛高达", "to": "牛高达2型", "note": "确认是两个 SKU"}
+  ]
+}
+```
+
+- `aliases`：命中后直接把写法规范化到 `to`，后续所有规则都按 `to` 走
+- `negative`：确认「不是同一个」的对，防止相似度规则再次误合（当前实现保留字段，合并逻辑待接入）
+- 目前表为空，需要人工从 `review.json` 确认后写入
+
+## 7. 已知局限
 
 - stage 判定依赖 prompt 与口播措辞，约 85–90% 准确，靠 `stage_cue` + 异常标记人工兜底
 - 价格未做币种/格式归一（59.8、298、137500 日元混存字符串）
-- 别名表尚未持久化：目前每次从数据重新聚类，人工确认结果不会复用
+- 别名表目前只有加载逻辑，尚无「复核 → 写回」的交互流程
+- `negative` 字段已预留，但相似度合并暂未消费它
 - 同一天多个变体（如四种装备包）会并成一个产品，仅打 `same_day_variants` 标记
