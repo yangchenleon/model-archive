@@ -28,7 +28,7 @@ from rapidocr_onnxruntime import RapidOCR
 
 SPACE = re.compile(r"\s+")
 CUE_SIMILARITY = 0.80
-CHANGE_THRESHOLD = 0.05
+CHANGE_THRESHOLD = 0.08
 
 
 def norm_text(text: str) -> str:
@@ -110,6 +110,10 @@ def keep_subtitle_box(box, gray: "np.ndarray", min_white: float = 0.2, min_aspec
 
 SUB_RULES = [
     (re.compile(r"[\u4e00-\u9fff]长大陆"), "酋长大陆"),          # 酋 is a hard glyph for OCR
+    (re.compile("眞"), "真"),          # traditional glyph survives the font
+    (re.compile("。，"), "，"),
+    (re.compile("，，"), "，"),
+    (re.compile("。。"), "。"),
     (re.compile("终干"), "终于"),
     (re.compile("处干"), "处于"),
     (re.compile("查接"), "直接"),
@@ -456,8 +460,12 @@ def read_subtitles(
 def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float, mode: str = "det") -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     engine = make_engine(mode)  # one model load for the whole run
+    excluded = set()
+    exclusion_file = output_dir.parent / "excluded.json"
+    if exclusion_file.exists():
+        excluded = {item["folder"] for item in json.loads(exclusion_file.read_text(encoding="utf-8"))}
     for folder in sorted(reports_dir.iterdir()):
-        if not folder.is_dir():
+        if not folder.is_dir() or folder.name in excluded:
             continue
         parts = folder.name.split("_")
         if len(parts) != 2 or not (start <= parts[0] <= end):
@@ -498,7 +506,7 @@ def suspicion(cue: dict[str, Any]) -> list[str]:
 
 
 def check(output_dir: Path, limit: int) -> None:
-    files = sorted(output_dir.glob("*.json"))
+    files = sorted(p for p in output_dir.glob("*.json") if not p.name.startswith("_"))
     if not files:
         print(f"{output_dir} 下没有字幕 JSON")
         return
