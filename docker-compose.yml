@@ -30,11 +30,14 @@ services:
       db:
         condition: service_healthy
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "127.0.0.1:${API_PORT:-18000}:8000"
     volumes:
-      - ./imports:/app/imports
+      - ./outputs:/app/outputs:ro
+      - ./backend/app:/app/app
+      - ./backend/alembic:/app/alembic
+      - ./backend/alembic.ini:/app/alembic.ini
   frontend:
     build:
       context: ./frontend
@@ -42,6 +45,10 @@ services:
       VITE_API_PROXY_TARGET: http://api:8000
     depends_on:
       - api
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
 volumes:

@@ -93,10 +93,10 @@ def build_news_prompt(transcript: str, metadata: dict[str, Any]) -> str:
 请只返回纯 JSON 对象，不要附加任何 Markdown 格式或前后说明。"""
 
 
-def _post_chat_completions(base_url: str, api_key: str, model: str, prompt: str, timeout: int = 120) -> str:
+def _post_chat_completions(base_url: str, api_key: str, model: str, prompt: str, timeout: int = 120, temperature: float = 0.1) -> str:
     payload = json.dumps({
         "model": model,
-        "temperature": 0.1,
+        "temperature": temperature,
         "max_tokens": 4096,
         "messages": [{"role": "user", "content": prompt}],
     }).encode("utf-8")
@@ -112,7 +112,7 @@ def _post_chat_completions(base_url: str, api_key: str, model: str, prompt: str,
     return res["choices"][0]["message"]["content"]
 
 
-def call_llm_json(prompt: str, model_override: str | None = None) -> dict[str, Any]:
+def call_llm_json(prompt: str, model_override: str | None = None, temperature: float = 0.1) -> dict[str, Any]:
     """Call LLM with fallback between configured LLM endpoint and DashScope endpoint."""
     llm_key = os.getenv("LLM_API_KEY")
     llm_base = os.getenv("LLM_BASE_URL")
@@ -136,7 +136,7 @@ def call_llm_json(prompt: str, model_override: str | None = None) -> dict[str, A
     last_error: Exception | None = None
     for base_url, key, model in candidates:
         try:
-            raw_text = _post_chat_completions(base_url, key, model, prompt, timeout=150)
+            raw_text = _post_chat_completions(base_url, key, model, prompt, timeout=150, temperature=temperature)
             cleaned = clean_json_text(raw_text)
             return json.loads(cleaned)
         except Exception as exc:

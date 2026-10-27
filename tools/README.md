@@ -38,7 +38,7 @@ The batch orchestrator writes a durable `batch/summary.json` with completed,
 failed and warning entries. `--retry --start N` retries failed and pending
 entries in the selected range while preserving successful entries. The output
 directory is ignored by git because it contains large downloaded media and
-transcripts; only reviewed CSV files should be copied to `imports/`.
+transcripts; CSVs are review artifacts, not an import channel.
 
 ## Image-only videos
 
@@ -123,6 +123,11 @@ cookies.
 
 ## Daily report: batch ASR stage
 
+> **Legacy.** The archive now uses burned-in subtitle OCR (see below) and
+> `outputs/daily_reports` keeps only `video/` and `subtitles/`；the ASR artifacts
+> (`audio/`, `transcript/`, `daily_report.json`) were deleted on 2026-10-23.
+> These tools still run if the ASR path is ever needed again.
+
 `batch_daily_reports` walks `outputs/daily_reports` and runs the audio → ASR →
 LLM chain for every folder that has `video/*.mp4` but no `daily_report.json`:
 
@@ -139,36 +144,58 @@ report, so `--start-date`/`--end-date` narrow it down to a date range.
 ## Product extraction and alignment (current standard)
 
 The current pipeline for 嘟嘟模玩 is: burned-in subtitle OCR → product extraction →
-exact-match alignment → HTML timeline. Design details and the maintenance
-workflow live in [docs/product-pipeline.md](../docs/product-pipeline.md).
+exact-match alignment → expandable HTML catalog. Design details and the
+maintenance workflow live in [docs/product-pipeline.md](../docs/product-pipeline.md).
 
 ```bash
-# 1) extract products from OCR subtitles
+# 1) extract products from OCR subtitles (writes <report>/mentions.json)
 .venv-tools/bin/python -m tools.extract_daily_products \
   --start-date 20260823 --end-date 20260922
 
 # 2) group by exact identity (no similarity merging)
 .venv-tools/bin/python -m tools.align_daily_products \
-  --mentions-dir outputs/daily_v2/v3/mentions \
-  --output-dir outputs/daily_v2/v3_31d \
   --start-date 20260823 --end-date 20260922
 
-# 3) render the timeline
-.venv-tools/bin/python -m tools.render_product_timeline \
-  --products outputs/daily_v2/v3_31d/products.json \
-  --output outputs/daily_v2/v3_31d/timeline.html
+# 3) render the catalog (one collapsible entry per product)
+.venv-tools/bin/python -m tools.render_product_timeline
 ```
 
 `extract_daily_products` asks the model for `brand / line / product / variant /
 status / price / detail / evidence`, with `status` constrained to the lifecycle
 enum (rumor → teaser → announced → preorder → released → reprint/discontinued).
-The prompt excludes giveaways/ads, keeps batch numbers in `line`, and rejects
-`GK`/“新厂” as manufacturer names.
+The prompt excludes giveaways/ads, keeps batch numbers in `line`, rejects
+`GK`/“新厂” as manufacturer names, and — because reviewers cover both official
+Bandai releases and third-party KO kits of the same mobile suits — requires the
+named KO maker (大班/高高/长龙/猛虎…) as `brand` instead of defaulting the
+famous prototype to 万代. Rows without a verbatim `evidence` quote, or from
+giveaway segments, are dropped in code.
+
+The KO attribution has a targeted regression suite:
+
+```bash
+.venv-tools/bin/python -m tools.eval_ko_prompt          # 11 real segments
+.venv-tools/bin/python -m tools.eval_ko_prompt --only 1011
+```
 
 `align_daily_products` groups mentions by `(brand, product, variant)` after
 deterministic normalization (brand suffixes, scale tokens, punctuation) and
-loads confirmed aliases from `outputs/daily_v2/alias.json`. There is **no
+loads confirmed aliases from `config/alias.json`. There is **no
 similarity or prefix merging**: look-alikes are only listed in `review.json`.
+
+`render_product_timeline` emits one collapsed `<details>` per product; expanding
+shows every mention (date, stage, price, variant, verbatim quote) with a Bilibili
+deep link to that second. The page ships a search box and a "multi-mention only"
+filter, so the full 785-product catalog stays browsable.
+
+The extracted mentions can be pushed into the database review queue and confirmed
+one by one in the frontend (`/#review`):
+
+```bash
+.venv-tools/bin/python -m tools.seed_review_queue
+```
+
+The queue, skip/map/create actions, and open design questions live in
+[docs/review-workflow.md](../docs/review-workflow.md).
 
 ## Burned-in subtitles: OCR with timestamps
 
@@ -181,9 +208,12 @@ ASR chunks, gives an exact timestamp per line:
 
 ```bash
 .venv-tools/bin/python -m tools.ocr_subtitles \
-  --video outputs/daily_reports/20260823_BV1ro8W6jEo3/video/BV1ro8W6jEo3.mp4 \
-  --output outputs/daily_v2/subtitles/20260823_BV1ro8W6jEo3.json
+  --video outputs/daily_reports/20260823_BV1ro8W6jEo3/video/BV1ro8W6jEo3.mp4
 ```
+
+The output defaults to `<report>/subtitles/<report>.json` next to the video, so
+a single clip and its OCR stay together; the batch run writes the same place for
+every folder under `outputs/daily_reports`.
 
 It samples the bottom band at 2 fps, merges consecutive lines into cues, and
 offers three recognition modes (measured on a 30 s clip, 1920×1080 source):
@@ -202,7 +232,7 @@ matters more than throughput:
 
 ```bash
 .venv-tools/bin/python -m tools.ocr_subtitles --mode det \
-  --video .../BV1ro8W6jEo3.mp4 --output .../20260823_BV1ro8W6jEo3.json
+  --video .../BV1ro8W6jEo3.mp4
 ```
 
 ```json
@@ -303,13 +333,10 @@ automatically splits WAV input into 60-second requests. It defaults to
 `qwen3-asr-flash`; override it with `--asr-model` or `ASR_MODEL`.
 
 Each stage is independently runnable and writes stable artifacts under the
-work directory. The CSV must use exactly the columns
-`厂商,产品编号,来源类型,产品线,模型名称,版本/配色,详情,资料来源`; inspect it before
-importing:
-
-```bash
-docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv
-```
+work directory. The CSV uses the columns
+`厂商,产品编号,来源类型,产品线,模型名称,版本/配色,详情,资料来源` as a review artifact.
+This project no longer ships a CSV importer: map those rows to
+`POST /api/v1/products` or `/api/v1/products/bulk` from an external adapter.
 
 The downloader uses yt-dlp's Bilibili extractor, which may still require
 cookies for restricted videos or fail when Bilibili changes its API. The tools

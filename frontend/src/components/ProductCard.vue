@@ -1,5 +1,5 @@
 <script setup>
-import { Building2, Tag } from 'lucide-vue-next'
+import { Barcode, Building2, Tag } from 'lucide-vue-next'
 
 defineProps({
   product: { type: Object, required: true },
@@ -21,13 +21,18 @@ function shortName(name) {
     <div class="product-card-content">
       <div class="product-card-heading">
         <h3>{{ product.kit_name }}</h3>
-        <span v-if="product.origin_type" class="origin-tag">{{ product.origin_type }}</span>
       </div>
       <div class="meta-row">
         <span v-if="product.manufacturer"><Building2 :size="14" />{{ product.manufacturer }}</span>
+        <span v-if="product.product_code"><Barcode :size="14" />{{ product.product_code }}</span>
         <span v-if="product.product_line"><Tag :size="14" />{{ product.product_line }}</span>
+        <span v-if="product.price" class="price-tag">{{ product.price }}</span>
       </div>
       <footer>来源：{{ product.source }}</footer>
     </div>
   </article>
 </template>
+
+<style scoped>
+.price-tag { color: #245a4c; font-variant-numeric: tabular-nums; }
+</style>

@@ -5,8 +5,11 @@ import SidebarNav from './components/SidebarNav.vue'
 import ProductCard from './components/ProductCard.vue'
 import ProductDrawer from './components/ProductDrawer.vue'
 import AddProductDialog from './components/AddProductDialog.vue'
+import ReviewView from './components/ReviewView.vue'
+import AdminView from './components/AdminView.vue'
 
-const activeSection = ref('directory')
+const initialSection = window.location.hash.replace('#', '')
+const activeSection = ref(['directory', 'review', 'admin', 'inventory', 'wishlist', 'activity'].includes(initialSection) ? initialSection : 'directory')
 const products = ref([])
 const loading = ref(true)
 const loadError = ref('')
@@ -16,9 +19,18 @@ const makerFilter = ref('')
 const view = ref('grid')
 const selectedProduct = ref(null)
 const addDialogOpen = ref(false)
+const reviewPending = ref(0)
+
+async function loadReviewPending() {
+  try {
+    const response = await fetch('/api/v1/review/stats')
+    if (response.ok) reviewPending.value = (await response.json()).pending
+  } catch {
+    /* badge is best-effort */
+  }
+}
 
 const makers = computed(() => [...new Set(products.value.map((item) => item.manufacturer).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN')))
-const origins = computed(() => [...new Set(products.value.map((item) => item.origin_type).filter(Boolean))].sort())
 
 // 厂商选定后，产品线栏仅可选厂商所存在的产品线，而非全局
 const productLines = computed(() => {
@@ -102,12 +114,19 @@ function onCreated(product) {
   selectedProduct.value = product
 }
 
-onMounted(loadProducts)
+watch(activeSection, (section) => {
+  window.location.hash = section === 'directory' ? '' : section
+})
+
+onMounted(() => {
+  loadProducts()
+  loadReviewPending()
+})
 </script>
 
 <template>
   <div class="app-shell">
-    <SidebarNav :active="activeSection" :total="products.length" @change="activeSection = $event" />
+    <SidebarNav :active="activeSection" :total="products.length" :pending="reviewPending" @change="activeSection = $event" />
 
     <main class="content">
       <section v-if="activeSection === 'directory'" class="directory-view">
@@ -119,7 +138,7 @@ onMounted(loadProducts)
         <section class="overview-row" aria-label="目录概要">
           <div class="metric"><span>已入库产品</span><strong>{{ products.length }}</strong><small>实时读取数据库</small></div>
           <div class="metric"><span>产品线</span><strong>{{ productLines.length }}</strong><small>待后续统一规范</small></div>
-          <div class="metric"><span>来源类型</span><strong>{{ origins.length }}</strong><small>当前为自由文本</small></div>
+          <div class="metric"><span>厂商</span><strong>{{ makers.length }}</strong><small>按厂商归并</small></div>
           <div class="metric mock-metric"><span>待补详情</span><strong>{{ products.filter((item) => !item.detail).length }}</strong><small>可作为整理队列</small></div>
         </section>
 
@@ -136,6 +155,14 @@ onMounted(loadProducts)
         <section v-else-if="loadError" class="state-panel error-state"><p>{{ loadError }}</p><button class="secondary-button" type="button" @click="loadProducts"><RefreshCw :size="16" />重新加载</button></section>
         <section v-else-if="filteredProducts.length" class="products" :class="`view-${view}`"><ProductCard v-for="product in filteredProducts" :key="product.id" :product="product" :view="view" @select="selectedProduct = $event" /></section>
         <section v-else class="state-panel"><p>没有符合条件的产品。</p><button class="secondary-button" type="button" @click="resetFilters">清除筛选</button></section>
+      </section>
+
+      <section v-else-if="activeSection === 'review'" class="review-section">
+        <ReviewView @pending="reviewPending = $event" />
+      </section>
+
+      <section v-else-if="activeSection === 'admin'" class="admin-section">
+        <AdminView />
       </section>
 
       <section v-else class="mock-view">

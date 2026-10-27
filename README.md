@@ -17,7 +17,7 @@ Adminer connection details: system `PostgreSQL`, server `db`, and the database/u
 
 ## Frontend
 
-The Vue frontend reads the product directory through `/api/v1/products`; product filters and the product detail panel therefore use live database data. Asset inventory, wish list, and activity pages are explicitly marked frontend mockups until those modules are designed.
+The Vue frontend reads the product directory through `/api/v1/products`; product filters and the product detail panel therefore use live database data. Two working pages sit beside the catalog: **入库审核** (`/#review`) turns extracted mentions into products (map / create / skip, with video deep links), and **后台管理** (`/#admin`) edits/deletes products through transactional API calls (deleting a product returns linked review items to the queue). See [docs/review-workflow.md](docs/review-workflow.md). Asset inventory, wish list, and activity pages are explicitly marked frontend mockups until those modules are designed.
 
 For frontend-only development:
 
@@ -31,24 +31,37 @@ npm run dev
 
 | Table | Purpose |
 | --- | --- |
-| `products` | One distinguishable product release: maker, type, line, version, detail and source. |
+| `products` | The product catalog: maker, code, line, name, detail, source, free-text `price`, `created_at`. No status or history columns. |
+| `review_items` | Persistent ingestion audit queue from `outputs/products/products.json`: source video/second/evidence plus `pending / mapped / created / skipped`. Mapping only links the mention to a product; it never edits the product. |
 | `assets` | Reserved for future physical-inventory work; currently no user import flow. |
 | `asset_events` | Reserved for future asset history. |
 
-## Import products
+## Create products via API
 
-Follow [`docs/csv-workflow.md`](docs/csv-workflow.md), then run:
+There is no built-in CSV importer. The catalog is written through the API, either
+one product at a time or as an atomic batch:
 
 ```bash
-docker compose exec api python -m app.scripts.import_products_csv /app/imports/products.csv --source 初始化测试
+# single
+curl -X POST http://localhost:18000/api/v1/products \
+  -H 'Content-Type: application/json' \
+  -d '{"kit_name":"MG 1/100 巴扎姆","manufacturer":"万代","source":"手动录入"}'
+
+# batch (all-or-nothing; any duplicate returns 409)
+curl -X POST http://localhost:18000/api/v1/products/bulk \
+  -H 'Content-Type: application/json' \
+  -d '[{"kit_name":"A","source":"手动录入"},{"kit_name":"B","source":"手动录入"}]'
 ```
+
+CSV/Excel/JSON parsing and format validation belong to the external tool that
+produces the payload; this project only accepts clean product fields.
 
 ## Source ingestion
 
 The composable video-to-CSV pipeline lives in [`tools/README.md`](tools/README.md).
 It downloads a Bilibili source, extracts audio, runs ASR, and asks an optional
-OpenAI-compatible LLM to produce the same CSV columns used by the importer.
-Generated CSV files should be reviewed before copying them to `imports/`.
+OpenAI-compatible LLM to produce reviewable CSV rows. Those rows are not imported
+by this project — adapt them to the API above if needed.
 
 ## Useful commands
 

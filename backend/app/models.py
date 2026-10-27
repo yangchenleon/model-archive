@@ -7,21 +7,49 @@ from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Num
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
+
+
 class Product(Base):
     __tablename__ = "products"
-    __table_args__ = (
-    )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     manufacturer: Mapped[str | None] = mapped_column(String(120))
     product_code: Mapped[str | None] = mapped_column(String(120))
-    origin_type: Mapped[str | None] = mapped_column(String(120))
     product_line: Mapped[str | None] = mapped_column(String(120))
     kit_name: Mapped[str] = mapped_column(String(240))
     detail: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(160))
+    price: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     assets: Mapped[list[Asset]] = relationship(back_populates="product")
+
+
+class ReviewItem(Base):
+    __tablename__ = "review_items"
+    __table_args__ = (
+        CheckConstraint("state IN ('pending', 'mapped', 'created', 'skipped')", name="ck_review_items_state"),
+        CheckConstraint(
+            "skip_reason IS NULL OR skip_reason IN ('later', 'ad', 'duplicate', 'invalid')",
+            name="ck_review_items_skip_reason",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    source_key: Mapped[str] = mapped_column(String(200), unique=True)
+    event_date: Mapped[date] = mapped_column(Date, index=True)
+    video_id: Mapped[str | None] = mapped_column(String(32))
+    start_seconds: Mapped[int | None] = mapped_column(Integer)
+    brand: Mapped[str | None] = mapped_column(String(120))
+    product: Mapped[str | None] = mapped_column(String(240))
+    line: Mapped[str | None] = mapped_column(String(120))
+    variant: Mapped[str | None] = mapped_column(String(120))
+    status_raw: Mapped[str | None] = mapped_column(String(32))
+    price_raw: Mapped[str | None] = mapped_column(String(64))
+    detail: Mapped[str | None] = mapped_column(Text)
+    evidence: Mapped[str | None] = mapped_column(Text)
+    product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"))
+    state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    skip_reason: Mapped[str | None] = mapped_column(String(24))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 class Asset(Base):
     __tablename__ = "assets"
     __table_args__ = (

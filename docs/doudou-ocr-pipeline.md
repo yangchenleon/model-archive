@@ -12,9 +12,13 @@
 ```text
 选定当天速报
    └─ tools/download_daily_videos.py   → outputs/daily_reports/<日期>_<BV>/video/*.mp4
-        └─ tools/ocr_subtitles.py      → outputs/daily_v2/subtitles/<日期>_<BV>.json
-             └─ tools.ocr_subtitles --check → _qa.json（可疑行清单）
+        └─ tools/ocr_subtitles.py      → outputs/daily_reports/<日期>_<BV>/subtitles/<日期>_<BV>.json
+             └─ tools.ocr_subtitles --check → outputs/daily_reports/_qa.json（可疑行清单）
 ```
+
+一期视频的所有派生物都留在该期目录内；只有人工维护的配置放在仓库根的
+`config/`，不放进 `outputs/`。音频、ASR 文本和 `daily_report.json` 属于已废弃的
+ASR 链路，不再保留。
 
 ## 2. 工具与参数
 
@@ -38,6 +42,9 @@
 .venv-tools/bin/python -m tools.ocr_subtitles \
   --start-date 20260701 --end-date 20261022     # 不传 --video 即批量
 ```
+
+结果写回各期目录的 `subtitles/`，已存在的文件跳过，所以整批可重复执行；单条视频用
+`--video <期目录>/video/<BV>.mp4`，默认输出到同一期目录。
 
 默认参数（已写死在工具里，无需每次传）：
 
@@ -69,18 +76,19 @@
 .venv-tools/bin/python -m tools.ocr_subtitles --check --check-limit 40
 ```
 
-输出 `_qa.json`，按「低置信 / 过短 / 无汉字 / 符号噪声 / 生僻字 / 重复字符」
-列出可疑行。当前全库水平：113 条视频、平均置信 0.975、可疑行约 0.6%。
+输出 `_qa.json`（写在各批次根目录 `outputs/daily_reports/_qa.json`），按「低置信 / 过短 / 无汉字 / 符号噪声 / 生僻字 / 重复字符」
+列出可疑行。当前全库水平：114 条视频、平均置信 0.977、可疑行约 0.6%。
 
 ### 2.4 排除名单
 
-`outputs/daily_v2/excluded.json` 列出不参与 OCR 的目录：
+`config/excluded.json` 列出不参与 OCR 的目录（当前为空）：
 
 ```json
-[{"folder": "20260708_BV1HzM36RENn", "reason": "竖屏产品展示视频，无字幕轨"}]
+[]
 ```
 
-批量任务会自动跳过名单中的目录。
+批量任务会自动跳过名单中的目录。加入名单前先确认源视频本身选错了还是只是没有字幕：
+选错片子应当重新下载替换，而不是排除（见 §4 #10）。
 
 ## 3. 阈值取舍（实测数据）
 
@@ -112,13 +120,14 @@
 | 7 | 动画帧出现 `YAY-O`/`PFAR` | 装饰字与字幕同框 | 逐帧多数投票 + 合并保留较早文本 |
 | 8 | 右/左边缘图形 `STUPiO`/`CnIDio` | 贴边图形 | 中心 x ∈ [0.15, 0.85] |
 | 9 | 数字 7 与「了」混淆 | 字体把「了」写成 7 | 上下文规则（单位除外） |
-| 10 | 竖屏视频全是乱码（0708） | 源视频 1080×1920 且无字幕 | 写入 `excluded.json` 跳过 |
+| 10 | 竖屏视频全是乱码（0708） | 当天选片选成了单品种草视频（`BV1HzM36RENn`，1080×1920 无字幕） | 换成当天速报 `BV1NtMa6XEFE`（1920×1080，82.9s）重下重跑，旧目录归档到 `backups/replaced/`，`excluded.json` 清空 |
+| 11 | `弹匣` 读成 `弹画`、`目前` 读成 `自前`（0708） | 字形相近，后处理没覆盖 | 未加规则：`自前` 会误伤「来自前方」等词；这类单字误识逐帧核对即可 |
 
 ## 5. 重跑清单
 
 ```bash
 # 1. 确认排除名单
-cat outputs/daily_v2/excluded.json
+cat config/excluded.json
 
 # 2. 批量 OCR（默认 det / 4fps / 0.04）
 .venv-tools/bin/python -m tools.ocr_subtitles --start-date 20260101 --end-date 20991231
@@ -129,16 +138,18 @@ cat outputs/daily_v2/excluded.json
 # 4. 抽查错片：按每分钟字数排序，明显偏低者回看源视频
 ```
 
-耗时参考：约 **90 秒/条**（4fps、0.04、单条 100–150 秒视频），113 条约 2.5–3 小时。
+耗时参考：约 **90 秒/条**（4fps、0.04、单条 100–150 秒视频），114 条约 2.5–3 小时。
 
 ## 6. 产物
 
 ```text
-outputs/daily_v2/
-  subtitles/<YYYYMMDD>_<BV>.json   # cues: [{start, end, text, score}]
-  subtitles/_qa.json               # 质检报告
-  excluded.json                    # 排除名单
-  ocr_compare/                     # 调参时的对比样本（可删）
+outputs/daily_reports/
+  <YYYYMMDD>_<BV>/
+    video/*.mp4                # 源视频 + yt-dlp 元数据
+    subtitles/<YYYYMMDD>_<BV>.json  # OCR：cues: [{start, end, text, score}]
+  _qa.json                     # 质检报告（全批汇总）
+config/
+  excluded.json                # 不参与 OCR 的目录
 ```
 
 单条 JSON 结构：

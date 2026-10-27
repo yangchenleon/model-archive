@@ -12,7 +12,7 @@ import difflib
 import json
 import re
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -74,11 +74,9 @@ def display_stage(status: str) -> tuple[str, str]:
     return "unknown", "none"
 
 
-def load_mentions(directory: Path, start: str, end: str) -> list[dict[str, Any]]:
+def load_mentions(reports_dir: Path, start: str, end: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for path in sorted(directory.glob("*.json")):
-        if path.name.startswith("_"):
-            continue
+    for path in sorted(reports_dir.glob("*/mentions.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
         if not (start <= payload["date"] <= end):
             continue
@@ -89,32 +87,43 @@ def load_mentions(directory: Path, start: str, end: str) -> list[dict[str, Any]]
     return rows
 
 
-def load_aliases(path: Path) -> dict[tuple[str, str], str]:
-    """Confirmed aliases: (brand key, observed product key) -> canonical product key."""
+def load_aliases(path: Path) -> tuple[dict[tuple[str, str], str], dict[tuple[str, str], str]]:
+    """Confirmed aliases: (brand key, observed product key) -> canonical key.
+
+    The second map keeps the *display* spelling of the canonical name so a merged
+    product is rendered as "福风牛高达" instead of whichever variant happened to
+    be mentioned first.
+    """
     if not path.exists():
-        return {}
+        return {}, {}
     payload = json.loads(path.read_text(encoding="utf-8"))
-    return {
-        (normalize_brand(entry["brand"]), norm(entry["from"])): norm(entry["to"])
-        for entry in payload.get("aliases", [])
-    }
+    alias_map: dict[tuple[str, str], str] = {}
+    display_map: dict[tuple[str, str], str] = {}
+    for entry in payload.get("aliases", []):
+        key = (normalize_brand(entry["brand"]), norm(entry["from"]))
+        alias_map[key] = norm(entry["to"])
+        display_map[key] = str(entry["to"]).strip()
+    return alias_map, display_map
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mentions-dir", type=Path, default=Path("outputs/daily_v2/v3/mentions"))
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/daily_v2/v3"))
-    parser.add_argument("--alias-file", type=Path, default=Path("outputs/daily_v2/alias.json"))
+    parser.add_argument("--reports-dir", type=Path, default=Path("outputs/daily_reports"))
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs/products"))
+    parser.add_argument("--alias-file", type=Path, default=Path("config/alias.json"))
     parser.add_argument("--start-date", default="00000000")
     parser.add_argument("--end-date", default="99999999")
     args = parser.parse_args()
 
-    rows = load_mentions(args.mentions_dir, args.start_date, args.end_date)
-    aliases = load_aliases(args.alias_file)
+    rows = load_mentions(args.reports_dir, args.start_date, args.end_date)
+    aliases, alias_display = load_aliases(args.alias_file)
     groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         brand_key = normalize_brand(row["brand"])
-        product_key = aliases.get((brand_key, norm(row["product"])), norm(row["product"]))
+        observed_key = norm(row["product"])
+        aliased = aliases.get((brand_key, observed_key))
+        product_key = aliased or observed_key
+        row["display_product"] = alias_display.get((brand_key, observed_key), row["product"])
         groups[(brand_key, product_key, norm(row.get("variant", "")))].append(row)
 
     products: list[dict[str, Any]] = []
@@ -149,10 +158,12 @@ def main() -> None:
                 "video_id": row["video_id"],
                 "start": row.get("time"),
             })
+        names = Counter(row["display_product"] for row in mentions)
+        model_name = max(names.items(), key=lambda item: (item[1], len(item[0])))[0]
         products.append({
             "id": f"Q{index:04d}",
             "brand": mentions[0]["brand"],
-            "model_name": mentions[0]["product"],
+            "model_name": model_name,
             "line": mentions[0].get("line", ""),
             "name_key": product_key,
             "variants": sorted({row.get("variant", "") for row in mentions if row.get("variant")}),

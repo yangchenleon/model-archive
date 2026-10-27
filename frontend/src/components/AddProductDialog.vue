@@ -9,7 +9,6 @@ const form = reactive({
   kit_name: '',
   manufacturer: '',
   product_code: '',
-  origin_type: '',
   product_line: '',
   detail: '',
   source: '手动录入',
@@ -46,14 +45,13 @@ async function submit() {
         source: form.source.trim(),
         manufacturer: valueOrNull(form.manufacturer),
         product_code: valueOrNull(form.product_code),
-        origin_type: valueOrNull(form.origin_type),
         product_line: valueOrNull(form.product_line),
         detail: valueOrNull(form.detail),
       }),
     })
     if (!response.ok) throw new Error('保存失败')
     const product = await response.json()
-    Object.assign(form, { kit_name: '', manufacturer: '', product_code: '', origin_type: '', product_line: '', detail: '', source: '手动录入' })
+    Object.assign(form, { kit_name: '', manufacturer: '', product_code: '', product_line: '', detail: '', source: '手动录入' })
     emit('created', product)
     emit('close')
   } catch {
@@ -77,7 +75,6 @@ async function submit() {
           <label class="form-field"><span>厂商</span><input v-model="form.manufacturer" placeholder="万代 / 大班 ..." /></label>
           <label class="form-field"><span>产品编号</span><input v-model="form.product_code" placeholder="例如：MDH-12E / RG32" /></label>
           <label class="form-field"><span>产品线</span><input v-model="form.product_line" placeholder="MG / HG / RG ..." /></label>
-          <label class="form-field"><span>来源类型</span><input v-model="form.origin_type" placeholder="正版 / 国模原创 / KO ..." /></label>
           <label class="form-field full"><span>详情</span><textarea v-model="form.detail" rows="3" placeholder="可留空，后续完善即可"></textarea></label>
           <label class="form-field full"><span>资料来源 <b>*</b></span><input v-model="form.source" required placeholder="手动录入" /></label>
         </div>

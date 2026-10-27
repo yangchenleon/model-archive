@@ -30,6 +30,16 @@ SPACE = re.compile(r"\s+")
 CUE_SIMILARITY = 0.80
 CHANGE_THRESHOLD = 0.04
 
+# OCR output lives inside each source folder (``<日期>_<BV>/subtitles/``), so a
+# video and everything derived from it stay together. Only hand-maintained
+# configuration stays outside ``outputs/``.
+EXCLUDED_FILE = Path("config/excluded.json")
+
+
+def subtitle_path(folder: Path) -> Path:
+    """``outputs/daily_reports/<日期>_<BV>/subtitles/<日期>_<BV>.json``."""
+    return folder / "subtitles" / f"{folder.name}.json"
+
 
 def norm_text(text: str) -> str:
     text = unicodedata.normalize("NFKC", text or "")
@@ -463,13 +473,19 @@ def read_subtitles(
     }
 
 
-def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float, mode: str = "det", threshold: float | None = None) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
+def batch(
+    reports_dir: Path,
+    start: str,
+    end: str,
+    fps: float,
+    mode: str = "det",
+    threshold: float | None = None,
+    excluded_file: Path = EXCLUDED_FILE,
+) -> None:
     engine = make_engine(mode)  # one model load for the whole run
     excluded = set()
-    exclusion_file = output_dir.parent / "excluded.json"
-    if exclusion_file.exists():
-        excluded = {item["folder"] for item in json.loads(exclusion_file.read_text(encoding="utf-8"))}
+    if excluded_file.exists():
+        excluded = {item["folder"] for item in json.loads(excluded_file.read_text(encoding="utf-8"))}
     for folder in sorted(reports_dir.iterdir()):
         if not folder.is_dir() or folder.name in excluded:
             continue
@@ -479,11 +495,12 @@ def batch(reports_dir: Path, start: str, end: str, output_dir: Path, fps: float,
         video = next((folder / "video").glob("*.mp4"), None)
         if not video:
             continue
-        out_path = output_dir / f"{folder.name}.json"
+        out_path = subtitle_path(folder)
         if out_path.exists():
             print(f"{folder.name} 已存在，跳过", flush=True)
             continue
         payload = read_subtitles(video, fps=fps, engine=engine, mode=mode, threshold=threshold or CHANGE_THRESHOLD)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{folder.name} cues={payload['cue_count']} chars={len(payload['text'])} ocr_calls={payload['ocr_calls']}", flush=True)
 
@@ -511,10 +528,10 @@ def suspicion(cue: dict[str, Any]) -> list[str]:
     return reasons
 
 
-def check(output_dir: Path, limit: int) -> None:
-    files = sorted(p for p in output_dir.glob("*.json") if not p.name.startswith("_"))
+def check(reports_dir: Path, limit: int) -> None:
+    files = sorted(p for p in reports_dir.glob("*/subtitles/*.json") if not p.name.startswith("_"))
     if not files:
-        print(f"{output_dir} 下没有字幕 JSON")
+        print(f"{reports_dir} 下没有字幕 JSON")
         return
     total_cues = 0
     flagged: list[dict[str, Any]] = []
@@ -550,16 +567,16 @@ def check(output_dir: Path, limit: int) -> None:
 
     report = {"videos": len(per_video), "cues": total_cues, "avg_score": round(avg, 3),
               "flagged": len(flagged), "items": flagged, "per_video": per_video}
-    (output_dir / "_qa.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n报告已写入 {output_dir / '_qa.json'}")
+    (reports_dir / "_qa.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n报告已写入 {reports_dir / '_qa.json'}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--video", type=Path, help="Single video file")
-    parser.add_argument("--output", type=Path, help="Output JSON for --video")
+    parser.add_argument("--output", type=Path, help="Output JSON for --video (default: <folder>/subtitles/<folder>.json)")
     parser.add_argument("--reports-dir", type=Path, default=Path("outputs/daily_reports"))
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/daily_v2/subtitles"))
+    parser.add_argument("--excluded", type=Path, default=EXCLUDED_FILE, help="Folders skipped by the batch run")
     parser.add_argument("--start-date", default="00000000")
     parser.add_argument("--end-date", default="99999999")
     parser.add_argument("--fps", type=float, default=4.0)
@@ -571,19 +588,22 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.check:
-        check(args.output_dir, args.check_limit)
+        check(args.reports_dir, args.check_limit)
         return
 
     if args.video:
         payload = read_subtitles(args.video, fps=args.fps, mode=args.mode, engine=make_engine(args.mode),
                                  threshold=args.threshold or CHANGE_THRESHOLD)
-        target = args.output or Path("outputs/daily_v2/subtitles") / f"{args.video.stem}.json"
+        target = args.output
+        if target is None:
+            folder = args.video.parent.parent if args.video.parent.name == "video" else None
+            target = subtitle_path(folder) if folder else Path("outputs/subtitles") / f"{args.video.stem}.json"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"{target} cues={payload['cue_count']} chars={len(payload['text'])} ocr_calls={payload['ocr_calls']}")
         return
 
-    batch(args.reports_dir, args.start_date, args.end_date, args.output_dir, args.fps, args.mode, args.threshold)
+    batch(args.reports_dir, args.start_date, args.end_date, args.fps, args.mode, args.threshold, args.excluded)
 
 
 if __name__ == "__main__":

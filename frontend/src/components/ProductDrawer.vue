@@ -1,11 +1,11 @@
 <script setup>
-import { Barcode, Building2, CalendarDays, Copy, ExternalLink, Tag, X } from 'lucide-vue-next'
+import { Barcode, Building2, CalendarDays, ExternalLink, Tag, Wallet, X } from 'lucide-vue-next'
 
 defineProps({ product: { type: Object, default: null } })
 defineEmits(['close'])
 
 function formatDate(value) {
-  return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date(value)) : '-'
+  return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date(value)) : '—'
 }
 </script>
 
@@ -22,14 +22,14 @@ function formatDate(value) {
           <div>
             <h2>{{ product.kit_name }}</h2>
           </div>
-          <span v-if="product.origin_type" class="origin-tag">{{ product.origin_type }}</span>
         </section>
         <dl class="detail-grid">
           <div><dt><Building2 :size="15" />厂商</dt><dd>{{ product.manufacturer || '未填写' }}</dd></div>
           <div><dt><Barcode :size="15" />产品编号</dt><dd>{{ product.product_code || '未填写' }}</dd></div>
           <div><dt><Tag :size="15" />产品线</dt><dd>{{ product.product_line || '未填写' }}</dd></div>
-          <div><dt><Copy :size="15" />资料来源</dt><dd>{{ product.source }}</dd></div>
+          <div><dt><Wallet :size="15" />价格</dt><dd>{{ product.price || '未记录' }}</dd></div>
           <div><dt><CalendarDays :size="15" />入库时间</dt><dd>{{ formatDate(product.created_at) }}</dd></div>
+          <div><dt><ExternalLink :size="15" />资料来源</dt><dd class="source-text">{{ product.source }}</dd></div>
         </dl>
         <section class="detail-section">
           <h3>详情</h3>
@@ -42,3 +42,7 @@ function formatDate(value) {
     </div>
   </Transition>
 </template>
+
+<style scoped>
+.source-text { overflow-wrap: anywhere; }
+</style>
