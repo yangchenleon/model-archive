@@ -33,8 +33,8 @@ npm run dev
 | --- | --- |
 | `products` | The product catalog: maker, code, line, name, detail, source, free-text `price`, `created_at`. No status or history columns. |
 | `review_items` | Persistent ingestion audit queue from `outputs/products/products.json`: source video/second/evidence plus `pending / mapped / created / skipped`. Mapping only links the mention to a product; it never edits the product. |
-| `assets` | One row per owned kit: `code` (`K7M2QF`, six random Crockford Base32 chars), `state` (pending / keep / displayed / stored / sold), purchase / build / sale facts and the review. |
-| `tags` | One physical sticker per bag (`K7M2QF`, `K7M2QF-2`). Codes derive from the asset code and are never reused. |
+| `assets` | One row per owned kit: `code` (`K7M2Q`, five random Crockford Base32 chars), `state` (pending / keep / displayed / stored / sold), purchase / build / sale facts and the review. |
+| `tags` | One physical sticker per bag (`R4TB9`). Every sticker has its own random code, never reused. |
 | `asset_state_changes` | Audit of state transitions; field edits are not recorded. |
 
 ## Create products via API

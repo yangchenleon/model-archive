@@ -25,7 +25,7 @@ def test_product_duplicate_is_rejected(client, product):
     assert again.status_code == 409
 
 
-CODE_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{6}(-[2-9][0-9]?)?$")
+CODE_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{5}$")
 
 
 def test_asset_gets_a_random_code_and_an_audit_row(client, product):
@@ -64,18 +64,19 @@ def test_bulk_create_allocates_one_code_each(client, product):
     assert len(codes) == len(set(codes)) == 2
 
 
-def test_second_bag_gets_the_next_suffix(client, product):
+def test_each_bag_gets_its_own_code(client, product):
     asset = make_asset(client, product)
     first = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "本体"}).json()
     second = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "配件包 2"}).json()
     third = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "地台"}).json()
 
-    assert [first["code"], second["code"], third["code"]] == [
-        asset["code"],
-        f"{asset['code']}-2",
-        f"{asset['code']}-3",
-    ]
-    assert [first["title"], second["title"], third["title"]] == ["本体", "配件包 2", "地台"]
+    # Stickers are independent: no suffix, no visible relation to the asset code.
+    codes = [first["code"], second["code"], third["code"]]
+    assert len(set(codes)) == 3
+    assert asset["code"] not in codes
+    assert all(CODE_RE.match(code) for code in codes)
+    assert [tag["seq"] for tag in (first, second, third)] == [1, 2, 3]
+    assert [tag["title"] for tag in (first, second, third)] == ["本体", "配件包 2", "地台"]
 
 
 def test_bulk_tags_skips_assets_that_already_have_one(client, product):
@@ -102,21 +103,22 @@ def test_tag_title_is_validated_and_renamable(client, product):
 def test_printing_moves_the_stamp_and_reprint_keeps_the_code(client, product):
     asset = make_asset(client, product)
     tag = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "本体"}).json()
+    code = tag["code"]
 
-    open_queue = client.get("/api/v1/tags?status=open").json()
-    assert [t["code"] for t in open_queue] == [tag["code"]]
+    def in_queue(status):
+        rows = client.get(f"/api/v1/tags?status={status}").json()
+        return [row for row in rows if row["code"] == code]
 
+    assert len(in_queue("open")) == 1
     client.post("/api/v1/tags/bulk/printed", json={"tag_ids": [tag["id"]]})
-    printed = client.get("/api/v1/tags?status=printed").json()
-    assert [t["code"] for t in printed] == [tag["code"]]
-    assert client.get("/api/v1/tags?status=open").json() == []
-    first_stamp = printed[0]["printed_at"]
+    assert in_queue("open") == []
+    first_stamp = in_queue("printed")[0]["printed_at"]
 
-    # Reprint the same sticker: same code, newer stamp.
+    # Reprint the same sticker: same code, newer stamp, still one row.
     client.post(f"/api/v1/tags/{tag['id']}/printed")
-    reprinted = client.get("/api/v1/tags?status=printed").json()[0]
-    assert reprinted["code"] == tag["code"]
-    assert reprinted["printed_at"] >= first_stamp
+    reprinted = in_queue("printed")
+    assert len(reprinted) == 1
+    assert reprinted[0]["printed_at"] >= first_stamp
 
 
 def test_deleting_an_asset_removes_its_tags(client, product):
@@ -136,23 +138,19 @@ def test_codes_are_unique_across_a_batch(client, product):
 
 def test_lookup_by_code_tolerates_typed_variants(client, product):
     asset = make_asset(client, product)
-    code = asset["code"]
+    tag = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "本体"}).json()
+    code = tag["code"]
 
-    by_upper = client.get(f"/api/v1/assets/by-code/{code}")
-    assert by_upper.status_code == 200
-    assert by_upper.json()["id"] == asset["id"]
+    assert client.get(f"/api/v1/assets/by-code/{code}").json()["id"] == asset["id"]
 
-    # Lower case, and the characters a sticker reader confuses.
+    # Lower case, a stray separator, and the characters a sticker reader confuses.
     typed = code.lower().replace("0", "o").replace("1", "i")
-    assert client.get(f"/api/v1/assets/by-code/{typed}").json()["id"] == asset["id"]
+    assert client.get(f"/api/v1/assets/by-code/{typed[:2]}-{typed[2:]}").json()["id"] == asset["id"]
 
-    # A second bag's code still lands on the asset.
-    tag = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "地台"}).json()
-    second = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "配件包 2"}).json()
-    hint = (code.lower().replace("0", "o").replace("1", "i") + "-2")
-    assert client.get(f"/api/v1/assets/by-code/{hint}").json()["id"] == asset["id"]
+    # The asset's own code resolves too.
+    assert client.get(f"/api/v1/assets/by-code/{asset['code']}").json()["id"] == asset["id"]
 
-    assert client.get("/api/v1/assets/by-code/ZZZZZZ").status_code == 404
+    assert client.get("/api/v1/assets/by-code/ZZZZZ").status_code == 404
 
 
 def test_qr_is_a_standalone_svg(client):

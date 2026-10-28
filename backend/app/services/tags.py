@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import Asset, AssetTag, Product
 from app.schemas import BulkTagCreate, TagQueueItem
 from app.services import assets as assets_service
+from app.services import codes
 from app.services.errors import Invalid, NotFound
 
 TITLE_MAX = 24
@@ -27,11 +28,6 @@ def clean_title(title: str | None) -> str:
     if len(value) > TITLE_MAX:
         raise Invalid(f"袋名最多 {TITLE_MAX} 个字符")
     return value
-
-
-def code_for(asset: Asset, seq: int) -> str:
-    """First bag reuses the asset code, later bags append the sequence."""
-    return asset.code if seq == 1 else f"{asset.code}-{seq}"
 
 
 def _require_tag(session: Session, tag_id: UUID) -> AssetTag:
@@ -47,7 +43,7 @@ def issue(session: Session, asset_id: UUID, title: str | None) -> AssetTag:
     asset = assets_service.load(session, asset_id)
     last_seq = session.scalar(select(func.max(AssetTag.seq)).where(AssetTag.asset_id == asset.id)) or 0
     seq = last_seq + 1
-    tag = AssetTag(asset_id=asset.id, seq=seq, code=code_for(asset, seq), title=value)
+    tag = AssetTag(asset_id=asset.id, seq=seq, code=codes.issue(session, 1)[0], title=value)
     session.add(tag)
     session.commit()
     session.refresh(tag)
@@ -69,13 +65,13 @@ def issue_first(session: Session, payload: BulkTagCreate) -> list[AssetTag]:
     if missing:
         raise NotFound(f"资产不存在：{missing[0]}")
 
-    created: list[AssetTag] = []
-    for asset in assets:
-        if asset.tags:
-            continue
-        tag = AssetTag(asset_id=asset.id, seq=1, code=asset.code, title=value)
-        session.add(tag)
-        created.append(tag)
+    pending = [asset for asset in assets if not asset.tags]
+    issued = codes.issue(session, len(pending))
+    created = [
+        AssetTag(asset_id=asset.id, seq=1, code=code, title=value)
+        for asset, code in zip(pending, issued)
+    ]
+    session.add_all(created)
     session.commit()
     for tag in created:
         session.refresh(tag)
@@ -120,7 +116,7 @@ def queue(session: Session, status: str, limit: int) -> list[TagQueueItem]:
         select(AssetTag, Asset, Product)
         .join(Asset, AssetTag.asset_id == Asset.id)
         .join(Product, Asset.product_id == Product.id)
-        .order_by(AssetTag.code)
+        .order_by(AssetTag.created_at, AssetTag.code)
         .limit(limit)
     )
     if status == "open":

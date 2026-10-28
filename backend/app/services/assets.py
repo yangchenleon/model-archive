@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import Asset, AssetStateChange, AssetTag, Product
 from app.schemas import AssetCreate, AssetUpdate, BulkAssetCreate, BulkStateUpdate
 from app.services import codes
-from app.services.errors import Conflict, Invalid, NotFound
+from app.services.errors import Invalid, NotFound
 
 STATES = {"pending", "keep", "displayed", "stored", "sold"}
 BULK_LIMIT = 200
@@ -40,21 +40,6 @@ def _require_product(session: Session, product_id: UUID) -> Product:
     return product
 
 
-def _unique_codes(session: Session, count: int) -> list[str]:
-    """Random codes collide rarely; check against the table and the batch itself."""
-    issued: list[str] = []
-    for _ in range(count):
-        for _attempt in range(20):
-            code = codes.new_code()
-            taken = session.scalar(select(Asset.id).where(Asset.code == code)) is not None
-            if not taken and code not in issued:
-                issued.append(code)
-                break
-        else:
-            raise Conflict("编号生成失败，请重试")
-    return issued
-
-
 def find_by_code(session: Session, raw: str) -> Asset:
     """Resolve a code typed or scanned from a sticker.
 
@@ -80,7 +65,7 @@ def create(session: Session, payload: AssetCreate) -> Asset:
     product = _require_product(session, payload.product_id)
     asset = Asset(
         product_id=product.id,
-        code=_unique_codes(session, 1)[0],
+        code=codes.issue(session, 1)[0],
         **payload.model_dump(exclude={"product_id"}),
     )
     session.add(asset)
@@ -105,7 +90,7 @@ def create_many(session: Session, payload: BulkAssetCreate) -> list[Asset]:
     if missing:
         raise NotFound(f"产品不存在：{missing[0]}")
 
-    issued = _unique_codes(session, len(payload.product_ids))
+    issued = codes.issue(session, len(payload.product_ids))
     assets = [
         Asset(product_id=pid, code=code, state=payload.state, acquired_on=payload.acquired_on)
         for pid, code in zip(payload.product_ids, issued)

@@ -6,11 +6,11 @@ import { ArrowLeft, LoaderCircle, Printer } from 'lucide-vue-next'
 // anything printed) so the layout can be judged on screen.
 const preview = new URLSearchParams(window.location.search).has('preview')
 const PREVIEW_SAMPLE = [
-  { id: 'p1', code: 'K7M2QF', title: '本体', kit_name: '灵枪·马尔洛克', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
-  { id: 'p2', code: 'R4TB9X', title: '本体', kit_name: '神器共鸣者·帕西瓦尔（豪华版）', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
-  { id: 'p3', code: 'W8NZ3J', title: '地台', kit_name: '雷鸣收割者·格雷斯', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
-  { id: 'p4', code: 'C5PV7H', title: '本体', kit_name: '灵皇守护者·高文（KK版）', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
-  { id: 'p5', code: 'H2QD8M-2', title: '余件', kit_name: '钢镰·凯', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
+  { id: 'p1', code: 'K7M2Q', title: '本体', kit_name: '灵枪·马尔洛克', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
+  { id: 'p2', code: 'R4TB9', title: '本体', kit_name: '神器共鸣者·帕西瓦尔（豪华版）', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
+  { id: 'p3', code: 'W8NZ3', title: '地台', kit_name: '雷鸣收割者·格雷斯', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
+  { id: 'p4', code: 'C5PV7', title: '本体', kit_name: '灵皇守护者·高文（KK版）', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
+  { id: 'p5', code: 'H2QD8', title: '余件', kit_name: '钢镰·凯', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
 ]
 const tags = ref([])
 const loading = ref(true)

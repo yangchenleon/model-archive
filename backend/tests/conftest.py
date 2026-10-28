@@ -30,6 +30,21 @@ def engine():
     engine.dispose()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def no_pollution(engine):
+    """Canary: the suite must not move the row counts of the dev database."""
+    tables = ("products", "assets", "tags", "asset_state_changes")
+
+    def counts():
+        with engine.connect() as connection:
+            return tuple(connection.scalar(text(f"SELECT count(*) FROM {table}")) for table in tables)
+
+    before = counts()
+    yield
+    after = counts()
+    assert before == after, f"测试污染了数据库：{before} -> {after}"
+
+
 @pytest.fixture
 def db(engine):
     connection = engine.connect()
