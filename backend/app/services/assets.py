@@ -7,9 +7,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Asset, AssetStateChange, Product
+from app.models import Asset, AssetStateChange, AssetTag, Product
 from app.schemas import AssetCreate, AssetUpdate, BulkAssetCreate, BulkStateUpdate
-from app.services.errors import Invalid, NotFound
+from app.services import codes
+from app.services.errors import Conflict, Invalid, NotFound
 
 STATES = {"pending", "keep", "displayed", "stored", "sold"}
 BULK_LIMIT = 200
@@ -39,11 +40,49 @@ def _require_product(session: Session, product_id: UUID) -> Product:
     return product
 
 
+def _unique_codes(session: Session, count: int) -> list[str]:
+    """Random codes collide rarely; check against the table and the batch itself."""
+    issued: list[str] = []
+    for _ in range(count):
+        for _attempt in range(20):
+            code = codes.new_code()
+            taken = session.scalar(select(Asset.id).where(Asset.code == code)) is not None
+            if not taken and code not in issued:
+                issued.append(code)
+                break
+        else:
+            raise Conflict("编号生成失败，请重试")
+    return issued
+
+
+def find_by_code(session: Session, raw: str) -> Asset:
+    """Resolve a code typed or scanned from a sticker.
+
+    A second bag carries ``<asset>-2``; scanning that should still land on the
+    asset, because the asset is what the page shows.
+    """
+    code = codes.normalise(raw)
+    asset = session.scalar(
+        select(Asset).where(Asset.code == code).options(selectinload(Asset.product), selectinload(Asset.tags))
+    )
+    if asset is None:
+        tag = session.scalar(select(AssetTag).where(AssetTag.code == code))
+        if tag is not None:
+            asset = load(session, tag.asset_id)
+    if asset is None:
+        raise NotFound("没有这个编号")
+    return asset
+
+
 def create(session: Session, payload: AssetCreate) -> Asset:
     """Buying the same kit twice means two rows; there is no quantity column."""
     ensure_state(payload.state)
     product = _require_product(session, payload.product_id)
-    asset = Asset(product_id=product.id, **payload.model_dump(exclude={"product_id"}))
+    asset = Asset(
+        product_id=product.id,
+        code=_unique_codes(session, 1)[0],
+        **payload.model_dump(exclude={"product_id"}),
+    )
     session.add(asset)
     session.flush()
     session.add(AssetStateChange(asset_id=asset.id, from_state=None, to_state=asset.state))
@@ -66,9 +105,10 @@ def create_many(session: Session, payload: BulkAssetCreate) -> list[Asset]:
     if missing:
         raise NotFound(f"产品不存在：{missing[0]}")
 
+    issued = _unique_codes(session, len(payload.product_ids))
     assets = [
-        Asset(product_id=pid, state=payload.state, acquired_on=payload.acquired_on)
-        for pid in payload.product_ids
+        Asset(product_id=pid, code=code, state=payload.state, acquired_on=payload.acquired_on)
+        for pid, code in zip(payload.product_ids, issued)
     ]
     session.add_all(assets)
     session.flush()

@@ -6,6 +6,8 @@ can move code around as long as these keep passing.
 
 from __future__ import annotations
 
+import re
+
 
 def make_asset(client, product, **fields):
     payload = {"product_id": product["id"], "state": "stored"}
@@ -23,9 +25,14 @@ def test_product_duplicate_is_rejected(client, product):
     assert again.status_code == 409
 
 
-def test_asset_gets_a_code_and_an_audit_row(client, product):
+CODE_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{6}(-[2-9][0-9]?)?$")
+
+
+def test_asset_gets_a_random_code_and_an_audit_row(client, product):
     asset = make_asset(client, product)
-    assert asset["code"].startswith("M-")
+    # Crockford Base32: no I, L, O or U, so a code survives a phone keypad.
+    assert CODE_RE.match(asset["code"]), asset["code"]
+    assert not asset["code"].startswith("M-")
     assert asset["state"] == "stored"
 
     changes = client.get(f"/api/v1/assets/{asset['id']}/state-changes").json()
@@ -119,6 +126,33 @@ def test_deleting_an_asset_removes_its_tags(client, product):
     assert client.delete(f"/api/v1/assets/{asset['id']}").status_code == 200
     codes = [t["code"] for t in client.get("/api/v1/tags?status=all").json()]
     assert tag["code"] not in codes
+
+
+def test_codes_are_unique_across_a_batch(client, product):
+    codes = [make_asset(client, product)["code"] for _ in range(8)]
+    assert len(set(codes)) == len(codes)
+    assert all(CODE_RE.match(code) for code in codes)
+
+
+def test_lookup_by_code_tolerates_typed_variants(client, product):
+    asset = make_asset(client, product)
+    code = asset["code"]
+
+    by_upper = client.get(f"/api/v1/assets/by-code/{code}")
+    assert by_upper.status_code == 200
+    assert by_upper.json()["id"] == asset["id"]
+
+    # Lower case, and the characters a sticker reader confuses.
+    typed = code.lower().replace("0", "o").replace("1", "i")
+    assert client.get(f"/api/v1/assets/by-code/{typed}").json()["id"] == asset["id"]
+
+    # A second bag's code still lands on the asset.
+    tag = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "地台"}).json()
+    second = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "配件包 2"}).json()
+    hint = (code.lower().replace("0", "o").replace("1", "i") + "-2")
+    assert client.get(f"/api/v1/assets/by-code/{hint}").json()["id"] == asset["id"]
+
+    assert client.get("/api/v1/assets/by-code/ZZZZZZ").status_code == 404
 
 
 def test_qr_is_a_standalone_svg(client):

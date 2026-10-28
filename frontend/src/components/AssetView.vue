@@ -71,6 +71,16 @@ async function loadAssets() {
   }
 }
 
+async function jumpToCode() {
+  const raw = search.value.trim()
+  if (!raw) return
+  try {
+    detail.value = await api(`/api/v1/assets/by-code/${encodeURIComponent(raw)}`)
+  } catch {
+    /* 不是编号就继续当普通搜索用 */
+  }
+}
+
 function toggleAsset(id) {
   const index = selected.value.indexOf(id)
   if (index >= 0) selected.value.splice(index, 1)
@@ -177,7 +187,7 @@ onMounted(loadAssets)
     </section>
 
     <section class="toolbar">
-      <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索编号、模型名、厂商" /></label>
+      <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索编号、模型名、厂商（回车按编号直达）" @keyup.enter="jumpToCode" /></label>
       <button v-if="stateFilter" class="reset-button" type="button" @click="stateFilter = ''">全部（{{ counts.all }}）</button>
       <span class="result-count">{{ selected.length ? `已选 ${selected.length} 项` : `${filtered.length} 项` }}</span>
     </section>

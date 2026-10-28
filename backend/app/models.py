@@ -2,7 +2,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, func, text
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
@@ -62,10 +62,8 @@ class Asset(Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), index=True)
-    # Allocated by a database sequence; never reused.
-    code: Mapped[str] = mapped_column(
-        String(20), unique=True, server_default=text("'M-' || lpad(nextval('asset_code_seq')::text, 3, '0')")
-    )
+    # Six random characters (Crockford Base32); assigned by app.services.codes.
+    code: Mapped[str] = mapped_column(String(20), unique=True)
     state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     note: Mapped[str | None] = mapped_column(Text)
     acquired_on: Mapped[date | None] = mapped_column(Date)

@@ -39,7 +39,7 @@ def list_assets(
     statement = (
         select(Asset)
         .options(selectinload(Asset.product), selectinload(Asset.tags))
-        .order_by(Asset.code.desc())
+        .order_by(Asset.created_at.desc(), Asset.code)
         .limit(limit)
     )
     if state and state != "all":
@@ -62,6 +62,12 @@ def bulk_create_assets(payload: BulkAssetCreate, session: Session = Depends(get_
 def bulk_update_state(payload: BulkStateUpdate, session: Session = Depends(get_session)) -> dict[str, int]:
     """One transition for many assets."""
     return service.change_many(session, payload)
+
+
+@router.get("/assets/by-code/{code}", response_model=AssetRead)
+def get_asset_by_code(code: str, session: Session = Depends(get_session)) -> Asset:
+    """Typed or scanned from a sticker; accepts lower case and O/I/L for 0/1."""
+    return service.find_by_code(session, code)
 
 
 @router.get("/assets/{asset_id}", response_model=AssetRead)
