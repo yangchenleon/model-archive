@@ -2,9 +2,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
@@ -50,34 +48,69 @@ class ReviewItem(Base):
     skip_reason: Mapped[str | None] = mapped_column(String(24))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class Asset(Base):
+    """One owned kit. Its life is linear: bought once, built once, sold once."""
+
     __tablename__ = "assets"
     __table_args__ = (
-        CheckConstraint("status IN ('wanted', 'ordered', 'owned_unbuilt', 'building', 'built', 'to_sell', 'to_trade', 'sold', 'returned', 'review')", name="ck_assets_status"),
-        CheckConstraint("condition IN ('sealed', 'opened', 'complete', 'incomplete', 'unknown')", name="ck_assets_condition"),
-        CheckConstraint("quantity > 0", name="ck_assets_quantity_positive"),
+        CheckConstraint(
+            "state IN ('pending', 'keep', 'displayed', 'stored', 'sold')", name="ck_assets_state"
+        ),
+        CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="ck_assets_rating"),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"))
-    status: Mapped[str] = mapped_column(String(32), index=True)
-    condition: Mapped[str] = mapped_column(String(32), default="unknown")
-    quantity: Mapped[int] = mapped_column(Integer, default=1)
-    storage_location: Mapped[str | None] = mapped_column(String(160))
+    product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), index=True)
+    # Allocated by a database sequence; never reused.
+    code: Mapped[str] = mapped_column(
+        String(20), unique=True, server_default=text("'M-' || lpad(nextval('asset_code_seq')::text, 3, '0')")
+    )
+    state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    note: Mapped[str | None] = mapped_column(Text)
     acquired_on: Mapped[date | None] = mapped_column(Date)
     purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    detail: Mapped[str | None] = mapped_column(Text)
+    built_on: Mapped[date | None] = mapped_column(Date)
+    rating: Mapped[int | None] = mapped_column(SmallInteger)
+    review: Mapped[str | None] = mapped_column(Text)
+    sold_on: Mapped[date | None] = mapped_column(Date)
+    sold_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     product: Mapped[Product] = relationship(back_populates="assets")
-    events: Mapped[list[AssetEvent]] = relationship(back_populates="asset", cascade="all, delete-orphan")
-class AssetEvent(Base):
-    __tablename__ = "asset_events"
-    __table_args__ = (CheckConstraint("event_type IN ('acquired', 'opened', 'build_started', 'build_completed', 'listed', 'traded', 'sold', 'returned', 'status_corrected', 'note')", name="ck_asset_events_type"),)
+    tags: Mapped[list[AssetTag]] = relationship(back_populates="asset", cascade="all, delete-orphan")
+    state_changes: Mapped[list[AssetStateChange]] = relationship(
+        back_populates="asset", cascade="all, delete-orphan"
+    )
+
+
+class AssetTag(Base):
+    """One physical sticker, i.e. one bag. Code derives from the asset code."""
+
+    __tablename__ = "tags"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "seq", name="uq_tags_asset_seq"),
+        CheckConstraint("seq > 0", name="ck_tags_seq_positive"),
+    )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), index=True)
-    event_type: Mapped[str] = mapped_column(String(32))
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    from_status: Mapped[str | None] = mapped_column(String(32))
-    to_status: Mapped[str | None] = mapped_column(String(32))
-    detail: Mapped[str | None] = mapped_column(Text)
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    asset: Mapped[Asset] = relationship(back_populates="events")
+    seq: Mapped[int] = mapped_column(SmallInteger, default=1)
+    code: Mapped[str] = mapped_column(String(24), unique=True)
+    # What the badge prints: 本体 / 配件包 2 / 地台 ...
+    title: Mapped[str] = mapped_column(String(24), default="本体")
+    # Last time this sticker came out of the printer; a reprint just moves it.
+    printed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    asset: Mapped[Asset] = relationship(back_populates="tags")
+
+
+class AssetStateChange(Base):
+    """Audit of state transitions: when the asset moved, not what it cost."""
+
+    __tablename__ = "asset_state_changes"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), index=True)
+    from_state: Mapped[str | None] = mapped_column(String(16))
+    to_state: Mapped[str] = mapped_column(String(16))
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    note: Mapped[str | None] = mapped_column(Text)
+    asset: Mapped[Asset] = relationship(back_populates="state_changes")
