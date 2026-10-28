@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -10,9 +11,10 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import Asset, AssetStateChange, AssetTag, Product
 from app.schemas import AssetCreate, AssetUpdate, BulkAssetCreate, BulkStateUpdate
 from app.services import codes
-from app.services.errors import Invalid, NotFound
+from app.services.errors import Conflict, Invalid, NotFound
+from app.states import ALLOWED_TRANSITIONS, ASSET_STATES, STATE_LABELS
 
-STATES = {"pending", "keep", "displayed", "stored", "sold"}
+STATES = set(ASSET_STATES)
 BULK_LIMIT = 200
 
 
@@ -20,6 +22,40 @@ def ensure_state(state: str) -> str:
     if state not in STATES:
         raise Invalid(f"state 必须是 {sorted(STATES)} 之一")
     return state
+
+
+def _retire_tags(asset: Asset, stamp: datetime | None = None) -> None:
+    """Selling the kit voids all of its stickers.
+
+    The rows stay (a retired sticker is still the history of that bag), but
+    they leave the print queues and cannot be reprinted or joined by a new bag.
+    """
+    retired_at = stamp or datetime.now(timezone.utc)
+    for tag in asset.tags:
+        if tag.retired_at is None:
+            tag.retired_at = retired_at
+
+
+def _transition(session: Session, asset: Asset, new_state: str, note: str | None = None) -> bool:
+    """Apply one legal transition, audit it, and retire tags on ``sold``.
+
+    ``sold`` is a sink: no state moves out of it, so a retired sticker can never
+    be silently revived by moving the asset back.
+    """
+    if new_state == asset.state:
+        return False
+    if new_state not in ALLOWED_TRANSITIONS[asset.state]:
+        raise Conflict(
+            f"不能从「{STATE_LABELS.get(asset.state, asset.state)}」"
+            f"改为「{STATE_LABELS.get(new_state, new_state)}」"
+        )
+    session.add(
+        AssetStateChange(asset_id=asset.id, from_state=asset.state, to_state=new_state, note=note)
+    )
+    asset.state = new_state
+    if new_state == "sold":
+        _retire_tags(asset)
+    return True
 
 
 def load(session: Session, asset_id: UUID) -> Asset:
@@ -107,17 +143,14 @@ def create_many(session: Session, payload: BulkAssetCreate) -> list[Asset]:
 
 
 def update(session: Session, asset_id: UUID, payload: AssetUpdate) -> Asset:
-    """Field edits are silent; a state change also appends an audit row."""
+    """Field edits are silent; a legal state change also appends an audit row."""
     asset = load(session, asset_id)
     data = payload.model_dump(exclude_unset=True)
 
-    new_state = data.get("state")
+    new_state = data.pop("state", None)
     if new_state is not None:
         ensure_state(new_state)
-        if new_state != asset.state:
-            session.add(AssetStateChange(asset_id=asset.id, from_state=asset.state, to_state=new_state))
-            asset.state = new_state
-        data.pop("state")
+        _transition(session, asset, new_state)
 
     for field, value in data.items():
         if isinstance(value, str):
@@ -130,7 +163,12 @@ def update(session: Session, asset_id: UUID, payload: AssetUpdate) -> Asset:
 
 
 def change_many(session: Session, payload: BulkStateUpdate) -> dict[str, int]:
-    """One transition for many assets; assets already in that state are skipped."""
+    """One transition for many assets; assets already in that state are skipped.
+
+    Validation happens for every selected asset before any row changes, so a
+    mixed selection cannot half-apply. The UI only offers states that are legal
+    for the whole selection; this is the server-side backstop.
+    """
     ensure_state(payload.state)
     assets = list(session.scalars(
         select(Asset).where(Asset.id.in_(payload.asset_ids)).options(selectinload(Asset.tags))
@@ -140,20 +178,19 @@ def change_many(session: Session, payload: BulkStateUpdate) -> dict[str, int]:
     if missing:
         raise NotFound(f"资产不存在：{missing[0]}")
 
-    changed = 0
     for asset in assets:
         if asset.state == payload.state:
             continue
-        session.add(
-            AssetStateChange(
-                asset_id=asset.id,
-                from_state=asset.state,
-                to_state=payload.state,
-                note=payload.note,
+        if payload.state not in ALLOWED_TRANSITIONS[asset.state]:
+            raise Conflict(
+                f"资产 {asset.code} 不能从「{STATE_LABELS.get(asset.state, asset.state)}」"
+                f"改为「{STATE_LABELS.get(payload.state, payload.state)}」"
             )
-        )
-        asset.state = payload.state
-        changed += 1
+
+    changed = 0
+    for asset in assets:
+        if _transition(session, asset, payload.state, payload.note):
+            changed += 1
     session.commit()
     return {"updated": len(assets), "changed": changed}
 

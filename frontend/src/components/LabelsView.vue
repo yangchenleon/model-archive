@@ -95,7 +95,7 @@ onMounted(loadQueue)
       <div>
         <p class="eyebrow">标签</p>
         <h1>标签队列</h1>
-        <p class="page-subtitle">生成后待打印的贴纸。打印即视为已贴，不再手工勾选。</p>
+        <p class="page-subtitle">生成后待打印的贴纸。打印即视为已贴，不再手工勾选；资产卖出后标签自动作废。</p>
       </div>
       <div class="header-actions">
         <button class="secondary-button" type="button" :disabled="loading" @click="loadQueue"><RefreshCw :size="16" />刷新</button>

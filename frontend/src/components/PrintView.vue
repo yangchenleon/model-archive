@@ -87,12 +87,16 @@ async function markPrinted() {
   const ids = tags.value.map((tag) => tag.id)
   if (!ids.length || preview) return
   try {
-    await fetch('/api/v1/tags/bulk/printed', {
+    const response = await fetch('/api/v1/tags/bulk/printed', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tag_ids: ids }),
     })
-    status.value = `已打印 ${ids.length} 张，并标记为已贴`
+    const body = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(body?.detail || `标记失败 (${response.status})`)
+    const printed = body?.printed ?? ids.length
+    const retired = body?.retired ?? 0
+    status.value = `已打印 ${printed} 张，并标记为已贴${retired ? `；${retired} 张已作废，未打印` : ''}`
   } catch (exc) {
     status.value = `打印完成，但标记失败：${exc.message}`
   }

@@ -55,7 +55,8 @@ product_id, state, skip_reason, created_at, reviewed_at
 - **新增**：手工录入（来源默认“手动录入”），同样走 `manufacturer + kit_name` 精确查重
 - **编辑**：只改 `products` 的字段；改名/换厂商时同样查重（排除自己）
 - **删除**：同一事务内把关联的 `review_items` 退回 `pending` 并清空 `product_id`，
-  再删除产品；如果产品仍被 `assets` 引用（RESTRICT），返回 409 且整笔回滚
+  再删除产品；收藏集里的目标通过 `collection_items.product_id` 的 `ON DELETE CASCADE` 一起删除；
+  如果产品仍被 `assets` 引用（RESTRICT），返回 409 且整笔回滚
 - **排序**：点击表头可按厂商 / 产品 / 编号 / 产品线 / 价格 / 入库时间排序，再点切换升降序
 - **关联审核记录**：编辑时列出该产品关联的 mention（日期、处理状态、厂商、产品、原视频链接）
 - **导出 CSV**：按当前搜索/排序导出产品字段，可直接留档或再导入
@@ -75,7 +76,7 @@ product_id, state, skip_reason, created_at, reviewed_at
 | POST | `/api/v1/review/{id}/skip` | 跳过，body `{"reason": "later"}` |
 | POST | `/api/v1/review/{id}/reset` | 退回待审（清空 product_id / skip_reason） |
 | PATCH | `/api/v1/products/{id}` | 编辑产品字段（改名查重） |
-| DELETE | `/api/v1/products/{id}` | 删除产品，关联审核记录退回待审 |
+| DELETE | `/api/v1/products/{id}` | 删除产品，关联审核记录退回待审，收藏集目标级联删除 |
 | GET | `/api/v1/media/{video_id}?date=YYYYMMDD` | 本地视频（Range） |
 
 ## 6. 运行

@@ -12,6 +12,9 @@ const STATE_META = {
   sold: { label: '卖出', hint: '已出手' },
 }
 const STATE_ORDER = ['pending', 'keep', 'displayed', 'stored', 'sold']
+// Buttons are ordered by what the action means, not by the metric-card order:
+// display/storage moves first, "sold" last.
+const ACTION_ORDER = ['displayed', 'stored', 'pending', 'keep', 'sold']
 
 const assets = ref([])
 const loading = ref(true)
@@ -43,7 +46,23 @@ const filtered = computed(() => {
 })
 
 const selectedSet = computed(() => new Set(selected.value))
+const selectedAssets = computed(() => assets.value.filter((asset) => selectedSet.value.has(asset.id)))
 const allChecked = computed(() => filtered.value.length > 0 && filtered.value.every((a) => selectedSet.value.has(a.id)))
+
+// A bulk move is offered only when every selected asset is either already in
+// that state or may legally move there. `sold` therefore appears for any mix of
+// non-sold assets, while a mixed pending+displayed selection cannot jump to
+// "stored". Same rule as the drawer, read from the API's allowed_next_states.
+const bulkActions = computed(() => {
+  const picked = selectedAssets.value
+  if (!picked.length) return []
+  return ACTION_ORDER.filter((state) =>
+    picked.some((asset) => asset.state !== state) &&
+    picked.every((asset) => asset.state === state || (asset.allowed_next_states || []).includes(state))
+  )
+})
+
+const taggableIds = computed(() => selectedAssets.value.filter((asset) => asset.state !== 'sold').map((asset) => asset.id))
 
 function flash(text, isError = false) {
   message.value = text
@@ -110,11 +129,15 @@ async function bulkState(state) {
 
 async function issueTags() {
   if (!selected.value.length || busy.value) return
+  if (!taggableIds.value.length) {
+    flash('已卖出的资产不能生成标签', true)
+    return
+  }
   busy.value = true
   try {
     const created = await api('/api/v1/assets/bulk/tags', {
       method: 'POST',
-      body: JSON.stringify({ asset_ids: selected.value, title: '本体' }),
+      body: JSON.stringify({ asset_ids: taggableIds.value, title: '本体' }),
     })
     flash(`已放入待打印队列：${created.length} 张，去「标签队列」打印`)
   } catch (exc) {
@@ -126,7 +149,7 @@ async function issueTags() {
 
 async function removeSelected() {
   if (!selected.value.length || busy.value) return
-  if (!window.confirm(`删除 ${selected.value.length} 条资产？编号不会回收。`)) return
+  if (!window.confirm(`删除 ${selected.value.length} 条资产？编号不会回收，标签和状态记录会一起删除。`)) return
   busy.value = true
   try {
     for (const id of selected.value) await api(`/api/v1/assets/${id}`, { method: 'DELETE' })
@@ -187,11 +210,12 @@ onMounted(loadAssets)
       <span class="result-count">{{ selected.length ? `已选 ${selected.length} 项` : `${filtered.length} 项` }}</span>
     </section>
 
-    <section v-if="selected.length" class="action-bar">
-      <span>设为</span>
-      <button v-for="state in STATE_ORDER" :key="state" class="chip-button" type="button" :disabled="busy" @click="bulkState(state)">{{ STATE_META[state].label }}</button>
+    <section v-if="selectedAssets.length" class="action-bar">
+      <span v-if="bulkActions.length">设为</span>
+      <button v-for="state in bulkActions" :key="state" class="chip-button" type="button" :disabled="busy" @click="bulkState(state)">{{ STATE_META[state].label }}</button>
+      <span v-if="!bulkActions.length">已卖出，无后续动作</span>
       <span class="divider"></span>
-      <button class="chip-button" type="button" :disabled="busy" @click="issueTags"><Printer :size="14" />生成标签</button>
+      <button class="chip-button" type="button" :disabled="busy || !taggableIds.length" @click="issueTags"><Printer :size="14" />生成标签</button>
       <button class="chip-button danger" type="button" :disabled="busy" @click="removeSelected"><Trash2 :size="14" />删除</button>
     </section>
 

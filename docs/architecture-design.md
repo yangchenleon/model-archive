@@ -2,9 +2,10 @@
 
 ## 当前目标
 
-当前只解决一件事：建立干净的产品目录。这里的产品是可区分的发行物，而不是用户实际拥有的盒子。
+产品目录、资产/标签、收藏集三块已经落地。产品是可区分的发行物；资产是实际拥有的那一台；
+收藏集是一张人定的、只指向已录入产品的目标清单。
 
-不在当前范围：原始 Markdown 或网页资料归档、资产录入、愿望单、收藏分组、拼装事件、图片、爬虫。
+不在当前范围：愿望单、原始 Markdown 或网页资料归档、拼装事件、图片、爬虫、多用户。
 
 ## 当前数据表
 
@@ -35,23 +36,32 @@
 ### `assets`、`tags` 与 `asset_state_changes`
 
 资产按“一台一份”记录：`assets` 保存状态与买入/拼装/卖出的事实字段，`tags` 保存物理贴纸（一张贴纸＝一个袋，
-码从资产码派生），`asset_state_changes` 只审计状态变动。设计取舍（为什么没有通用事件表）见
+每张独立随机码），`asset_state_changes` 只审计状态变动。资产卖出时，其 tags 写入 `retired_at`：离开打印队列，
+不能重打/加袋，但行保留为历史。设计取舍（为什么没有通用事件表）见
 [asset-and-labels.md](asset-and-labels.md)。
 
 `asset_events` 已删除：`rating` 只属于拼装、`amount` 只属于买卖，挂在同一个 `kind` 上会让每行带着一堆
 永远为空的列。资产生命周期是线性的，买、拼、卖各发生一次，所以它们是列而不是行。
 
+### `collections` 与 `collection_items`
+
+收藏集是“人定的产品清单”：`collections` 存标题、描述、状态、日期，`collection_items` 存一个**已录入产品**
+和一条目标备注。目标不允许占位，`product_id` 非空；产品删除时目标级联删除。进度不落库，由 `assets` 派生：
+已售不算拥有，同款多台只算一次。设计见 [collection-system.md](collection-system.md)。
+
 ## 已删除的设计
 
-`collection_targets` 已删除。收藏分组、愿望单、纳入/跳过规则都属于未来的独立功能，不再混入产品目录。
+`collection_targets` 已删除，旧模型没有收藏集实体、没有描述/状态，还把“想收/已拥有”混在一个枚举里。
+收藏集现在按 `collections + collection_items` 重新建模，见 [collection-system.md](collection-system.md)。
+愿望单仍是独立功能。
 
 ## 代码结构
 
 ```text
 backend/app/
   main.py      组装：注册路由、把领域错误映射成 HTTP 状态码
-  api/         URL 与入参：products / review / assets / tags / media
-  services/    规则：重复判定、状态迁移与审计、标签编号与重打
+  api/         URL 与入参：products / review / assets / tags / collections / media
+  services/    规则：重复判定、状态迁移与审计、标签作废、收藏集范围与统计
   models.py    表
   schemas.py   出入参
 ```
@@ -70,10 +80,11 @@ backend/app/
 
 ## 下一阶段
 
-资产已落地（表、接口、`/#inventory` 页面）。下一步是把标签渲染接到页面：现在只能在队列里看到待贴的码，
-还不能一键出纸。设计稿见 [asset-and-labels.md](asset-and-labels.md)。
+资产、标签、收藏集已落地（`/#inventory`、`/#labels`、`/#collections`）。下一步看实际使用：产品目录质量、
+收藏集的机体级分组等。
 
 位置尚未固定，所以**不做**容器/摆放模型；等“某个箱子固定放某几台、并且要按位置找东西”时再加，
 用已有的 `assets.id` 关联，标签不用重贴。
 
-愿望单/收藏分组仍是独立功能，在资产稳定后单独建模。
+愿望单仍是独立功能，在需要时单独建模。收藏集已按“人定范围、产品级目标、从资产派生进度”落地，见
+[collection-system.md](collection-system.md)。

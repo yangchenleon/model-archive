@@ -38,6 +38,98 @@ class ProductRead(BaseModel):
     created_at: datetime
 
 
+class CollectionCreate(BaseModel):
+    title: str
+    description: str | None = None
+    status: str = "active"
+    started_on: date | None = None
+    target_on: date | None = None
+
+
+class CollectionUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None
+    started_on: date | None = None
+    target_on: date | None = None
+
+
+class CollectionStats(BaseModel):
+    total: int = 0
+    owned: int = 0
+    built: int = 0
+    unbuilt: int = 0
+    missing: int = 0
+    sold_only: int = 0
+    extra_copies: int = 0
+    percent: float = 0
+    completed: bool = False
+
+
+class CollectionRead(BaseModel):
+    id: UUID
+    title: str
+    description: str | None = None
+    status: str
+    started_on: date | None = None
+    target_on: date | None = None
+    created_at: datetime
+    updated_at: datetime
+    stats: CollectionStats
+
+
+class CollectionItemCreate(BaseModel):
+    product_id: UUID
+
+
+class CollectionItemUpdate(BaseModel):
+    note: str | None = None
+
+
+class CollectionItemRead(BaseModel):
+    id: UUID
+    product_id: UUID
+    name: str
+    manufacturer: str | None = None
+    product_line: str | None = None
+    product_code: str | None = None
+    note: str | None = None
+    owned: bool
+    built: bool
+    sold_only: bool
+    asset_count: int = 0
+    asset_states: list[str] = []
+    sold_count: int = 0
+
+
+class CollectionItemList(BaseModel):
+    total: int
+    items: list[CollectionItemRead]
+
+
+class CollectionBulkAdd(BaseModel):
+    product_ids: list[UUID]
+
+
+class CollectionBulkAddResult(BaseModel):
+    added: int
+    skipped: int
+
+
+class CollectionBulkRemove(BaseModel):
+    item_ids: list[UUID]
+
+
+class CollectionBulkRemoveResult(BaseModel):
+    removed: int
+
+
+class ProductCollectionRead(BaseModel):
+    id: UUID
+    title: str
+    owned: bool
+
+
 class ReviewItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -98,6 +190,7 @@ class TagRead(BaseModel):
     code: str
     title: str
     printed_at: datetime | None = None
+    retired_at: datetime | None = None
 
 
 class TagCreate(BaseModel):
@@ -142,6 +235,9 @@ class AssetRead(BaseModel):
     id: UUID
     code: str
     state: str
+    # Derived from app.states; the drawer and the bulk bar both read this so
+    # the two surfaces cannot disagree about what is allowed.
+    allowed_next_states: list[str] = []
     note: str | None = None
     acquired_on: date | None = None
     purchase_price: Decimal | None = None
@@ -188,3 +284,4 @@ class TagQueueItem(BaseModel):
     product_line: str | None = None
     created_at: datetime
     printed_at: datetime | None = None
+    retired_at: datetime | None = None

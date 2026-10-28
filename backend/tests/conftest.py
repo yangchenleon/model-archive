@@ -33,7 +33,7 @@ def engine():
 @pytest.fixture(scope="session", autouse=True)
 def no_pollution(engine):
     """Canary: the suite must not move the row counts of the dev database."""
-    tables = ("products", "assets", "tags", "asset_state_changes")
+    tables = ("products", "assets", "tags", "asset_state_changes", "collections", "collection_items")
 
     def counts():
         with engine.connect() as connection:

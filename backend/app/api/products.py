@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_session
 from app.models import Product
-from app.schemas import ProductCreate, ProductRead, ProductUpdate
+from app.schemas import ProductCollectionRead, ProductCreate, ProductRead, ProductUpdate
+from app.services import collections as collection_service
 from app.services import products as service
 
 router = APIRouter(tags=["products"])
@@ -48,6 +49,15 @@ def list_products(
             Product.product_code.ilike(term),
         ))
     return list(session.scalars(statement))
+
+
+@router.get("/products/{product_id}/collections", response_model=list[ProductCollectionRead])
+def list_product_collections(
+    product_id: UUID,
+    session: Session = Depends(get_session),
+) -> list[ProductCollectionRead]:
+    """Which collections include this product, and whether it is currently owned."""
+    return collection_service.product_collections(session, product_id)
 
 
 @router.get("/products/{product_id}", response_model=ProductRead)

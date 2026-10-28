@@ -200,3 +200,110 @@ def test_search_finds_assets_by_name_and_code(client, product):
     by_code = client.get("/api/v1/assets", params={"q": asset["code"]}).json()
     assert asset["id"] in [a["id"] for a in by_name]
     assert asset["id"] in [a["id"] for a in by_code]
+
+
+def test_allowed_next_states_are_part_of_the_asset_payload(client, product):
+    pending = make_asset(client, product, state="pending")
+    assert pending["allowed_next_states"] == ["displayed", "keep", "sold"]
+
+    stored = make_asset(client, product, state="stored")
+    assert stored["allowed_next_states"] == ["displayed", "sold"]
+
+    sold = client.patch(f"/api/v1/assets/{pending['id']}", json={"state": "sold"}).json()
+    assert sold["state"] == "sold"
+    assert sold["allowed_next_states"] == []
+
+
+def test_every_non_sold_state_can_be_sold(client, product):
+    for state in ("pending", "keep", "displayed", "stored"):
+        asset = make_asset(client, product, state=state)
+        sold = client.patch(f"/api/v1/assets/{asset['id']}", json={"state": "sold"})
+        assert sold.status_code == 200, f"{state}: {sold.text}"
+        assert sold.json()["state"] == "sold"
+        assert sold.json()["allowed_next_states"] == []
+
+
+def test_selling_retires_tags_and_is_terminal(client, product):
+    asset = make_asset(client, product, state="pending")
+    tag = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "本体"}).json()
+
+    sold = client.patch(f"/api/v1/assets/{asset['id']}", json={"state": "sold"})
+    assert sold.status_code == 200, sold.text
+    assert sold.json()["state"] == "sold"
+
+    # The sticker row is kept, but stamped as retired.
+    tags = client.get(f"/api/v1/assets/{asset['id']}").json()["tags"]
+    assert len(tags) == 1
+    assert tags[0]["retired_at"] is not None
+
+    def codes(status):
+        return [row["code"] for row in client.get(f"/api/v1/tags?status={status}").json()]
+
+    assert tag["code"] not in codes("open")
+    assert tag["code"] not in codes("printed")
+    assert tag["code"] in codes("retired")
+    assert tag["code"] in codes("all")
+
+    # A retired sticker cannot be printed, and a sold asset cannot gain a bag.
+    assert client.post(f"/api/v1/tags/{tag['id']}/printed").status_code == 409
+    assert client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "地台"}).status_code == 409
+
+    # Sold is a sink: no route may move the asset back.
+    assert client.patch(f"/api/v1/assets/{asset['id']}", json={"state": "pending"}).status_code == 409
+    assert client.post(
+        "/api/v1/assets/bulk/state",
+        json={"asset_ids": [asset["id"]], "state": "displayed"},
+    ).status_code == 409
+
+
+def test_bulk_sold_from_mixed_states_retires_every_tag(client, product):
+    pending = make_asset(client, product, state="pending")
+    displayed = make_asset(client, product, state="displayed")
+    tag_a = client.post(f"/api/v1/assets/{pending['id']}/tags", json={"title": "本体"}).json()
+    tag_b = client.post(f"/api/v1/assets/{displayed['id']}/tags", json={"title": "地台"}).json()
+
+    response = client.post(
+        "/api/v1/assets/bulk/state",
+        json={"asset_ids": [pending["id"], displayed["id"]], "state": "sold"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"updated": 2, "changed": 2}
+
+    for asset_id in (pending["id"], displayed["id"]):
+        body = client.get(f"/api/v1/assets/{asset_id}").json()
+        assert body["state"] == "sold"
+        assert all(tag["retired_at"] is not None for tag in body["tags"])
+
+    retired_codes = [row["code"] for row in client.get("/api/v1/tags?status=retired").json()]
+    assert tag_a["code"] in retired_codes
+    assert tag_b["code"] in retired_codes
+
+
+def test_bulk_rejects_a_transition_that_is_not_legal_for_every_asset(client, product):
+    pending = make_asset(client, product, state="pending")
+    displayed = make_asset(client, product, state="displayed")
+
+    response = client.post(
+        "/api/v1/assets/bulk/state",
+        json={"asset_ids": [pending["id"], displayed["id"]], "state": "stored"},
+    )
+    assert response.status_code == 409
+    assert client.get(f"/api/v1/assets/{pending['id']}").json()["state"] == "pending"
+    assert client.get(f"/api/v1/assets/{displayed['id']}").json()["state"] == "displayed"
+
+
+def test_sold_asset_cannot_requeue_and_bulk_print_skips_retired(client, product):
+    asset = make_asset(client, product, state="stored")
+    tag = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "本体"}).json()
+    client.patch(f"/api/v1/assets/{asset['id']}", json={"state": "sold"})
+
+    requeue = client.post("/api/v1/assets/bulk/tags", json={"asset_ids": [asset["id"]]})
+    assert requeue.status_code == 409
+
+    printed = client.post("/api/v1/tags/bulk/printed", json={"tag_ids": [tag["id"]]})
+    assert printed.status_code == 200
+    assert printed.json() == {"requested": 1, "printed": 0, "retired": 1}
+
+
+def test_unknown_tag_queue_status_is_rejected(client):
+    assert client.get("/api/v1/tags?status=nope").status_code == 422

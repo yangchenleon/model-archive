@@ -17,7 +17,7 @@ from app.models import Asset, AssetTag, Product
 from app.schemas import BulkTagCreate, TagQueueItem
 from app.services import assets as assets_service
 from app.services import codes
-from app.services.errors import Invalid, NotFound
+from app.services.errors import Conflict, Invalid, NotFound
 
 TITLE_MAX = 24
 DEFAULT_TITLE = "本体"
@@ -41,6 +41,8 @@ def issue(session: Session, asset_id: UUID, title: str | None) -> AssetTag:
     """Add one more bag to an asset; the next free seq picks the suffix."""
     value = clean_title(title)
     asset = assets_service.load(session, asset_id)
+    if asset.state == "sold":
+        raise Conflict("已卖出的资产不能加标签")
     last_seq = session.scalar(select(func.max(AssetTag.seq)).where(AssetTag.asset_id == asset.id)) or 0
     seq = last_seq + 1
     tag = AssetTag(asset_id=asset.id, seq=seq, code=codes.issue(session, 1)[0], title=value)
@@ -56,6 +58,7 @@ def requeue(session: Session, payload: BulkTagCreate) -> list[AssetTag]:
     An asset without a sticker gets one; an asset that already has stickers has
     them marked unprinted again, keeping their codes — a reprint is the same
     sticker, and the asset page does not need to know which case it hit.
+    Sold assets are skipped: their stickers are retired for good.
     """
     value = clean_title(payload.title)
     assets = list(session.scalars(
@@ -66,21 +69,28 @@ def requeue(session: Session, payload: BulkTagCreate) -> list[AssetTag]:
     if missing:
         raise NotFound(f"资产不存在：{missing[0]}")
 
-    fresh = [asset for asset in assets if not asset.tags]
+    if not assets:
+        return []
+
+    eligible = [asset for asset in assets if asset.state != "sold"]
+    if not eligible:
+        raise Conflict("已卖出的资产不能生成标签")
+
+    fresh = [asset for asset in eligible if not asset.tags]
     issued = codes.issue(session, len(fresh))
     session.add_all([
         AssetTag(asset_id=asset.id, seq=1, code=code, title=value)
         for asset, code in zip(fresh, issued)
     ])
 
-    for asset in assets:
+    for asset in eligible:
         for tag in asset.tags:
             tag.printed_at = None
 
     session.commit()
     return list(session.scalars(
         select(AssetTag)
-        .where(AssetTag.asset_id.in_([asset.id for asset in assets]))
+        .where(AssetTag.asset_id.in_([asset.id for asset in eligible]))
         .order_by(AssetTag.created_at, AssetTag.code)
     ))
 
@@ -101,6 +111,8 @@ def rename(session: Session, tag_id: UUID, title: str) -> AssetTag:
 
 def mark_printed(session: Session, tag_id: UUID) -> AssetTag:
     tag = _require_tag(session, tag_id)
+    if tag.retired_at is not None:
+        raise Conflict("标签已作废")
     tag.printed_at = datetime.now(timezone.utc)
     session.commit()
     session.refresh(tag)
@@ -108,17 +120,29 @@ def mark_printed(session: Session, tag_id: UUID) -> AssetTag:
 
 
 def mark_many_printed(session: Session, tag_ids: list[UUID]) -> dict[str, int]:
-    """Called by the print page: moving the stamp forward also covers reprints."""
+    """Called by the print page: moving the stamp forward also covers reprints.
+
+    A retired sticker is skipped rather than printed, even if it was selected
+    just before the asset was sold.
+    """
     now = datetime.now(timezone.utc)
     tags = list(session.scalars(select(AssetTag).where(AssetTag.id.in_(tag_ids))))
-    for tag in tags:
+    active = [tag for tag in tags if tag.retired_at is None]
+    for tag in active:
         tag.printed_at = now
     session.commit()
-    return {"requested": len(tag_ids), "printed": len(tags)}
+    return {"requested": len(tag_ids), "printed": len(active), "retired": len(tags) - len(active)}
 
 
 def queue(session: Session, status: str, limit: int) -> list[TagQueueItem]:
-    """``open`` is the print queue; ``printed`` is where damaged stickers are found again."""
+    """``open`` is the print queue; ``printed`` is where damaged stickers are found again.
+
+    Retired stickers (asset sold) have their own view and never appear in the
+    two working queues. ``all`` keeps everything for history/debugging.
+    """
+    if status not in {"open", "printed", "retired", "all"}:
+        raise Invalid("status 必须是 open / printed / retired / all 之一")
+
     statement = (
         select(AssetTag, Asset, Product)
         .join(Asset, AssetTag.asset_id == Asset.id)
@@ -127,9 +151,11 @@ def queue(session: Session, status: str, limit: int) -> list[TagQueueItem]:
         .limit(limit)
     )
     if status == "open":
-        statement = statement.where(AssetTag.printed_at.is_(None))
+        statement = statement.where(AssetTag.printed_at.is_(None), AssetTag.retired_at.is_(None))
     elif status == "printed":
-        statement = statement.where(AssetTag.printed_at.is_not(None))
+        statement = statement.where(AssetTag.printed_at.is_not(None), AssetTag.retired_at.is_(None))
+    elif status == "retired":
+        statement = statement.where(AssetTag.retired_at.is_not(None))
     return [
         TagQueueItem(
             id=tag.id,
@@ -143,6 +169,7 @@ def queue(session: Session, status: str, limit: int) -> list[TagQueueItem]:
             product_line=product.product_line,
             created_at=tag.created_at,
             printed_at=tag.printed_at,
+            retired_at=tag.retired_at,
         )
         for tag, asset, product in session.execute(statement).all()
     ]

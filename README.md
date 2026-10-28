@@ -1,6 +1,6 @@
 # Model Archive
 
-个人拼装模型产品目录系统。当前阶段只建设产品目录；资产、愿望单和事件功能暂缓。
+个人拼装模型档案：产品目录、资产与标签、收藏集。愿望单和活动记录仍暂缓。
 
 ## Start
 
@@ -12,12 +12,13 @@ docker compose up --build -d
 - API documentation: <http://localhost:18000/docs>
 - Database browser (Adminer): <http://localhost:18080>
 - Product archive frontend: <http://localhost:5173>
+- Deploy to another host + import a database dump: [docs/deploy-and-restore.md](docs/deploy-and-restore.md)
 
 Adminer connection details: system `PostgreSQL`, server `db`, and the database/user/password from `.env`.
 
 ## Frontend
 
-The Vue frontend reads the product directory through `/api/v1/products`; product filters and the product detail panel therefore use live database data. Three working pages sit beside the catalog: **入库审核** (`/#review`) turns extracted mentions into products (map / create / skip, with video deep links), **后台管理** (`/#admin`) edits/deletes products through transactional API calls (deleting a product returns linked review items to the queue), and **我的资产** (`/#inventory`) records owned kits, their state, and the stickers that go on the storage bags. See [docs/review-workflow.md](docs/review-workflow.md) and [docs/asset-and-labels.md](docs/asset-and-labels.md). Wish list and activity pages are still frontend mockups.
+The Vue frontend reads the product directory through `/api/v1/products`; product filters and the product detail panel therefore use live database data. Working pages sit beside the catalog: **入库审核** (`/#review`) turns extracted mentions into products (map / create / skip, with video deep links), **后台管理** (`/#admin`) edits/deletes products through transactional API calls (deleting a product returns linked review items to the queue), **我的资产** (`/#inventory`) records owned kits, their state, and the stickers that go on the storage bags, and **收藏集** (`/#collections`) compares a human-defined product list against those assets. See [docs/review-workflow.md](docs/review-workflow.md), [docs/asset-and-labels.md](docs/asset-and-labels.md), and [docs/collection-system.md](docs/collection-system.md). Wish list and activity pages are still frontend mockups.
 
 For frontend-only development:
 
@@ -34,8 +35,10 @@ npm run dev
 | `products` | The product catalog: maker, code, line, name, detail, source, free-text `price`, `created_at`. No status or history columns. |
 | `review_items` | Persistent ingestion audit queue from `outputs/products/products.json`: source video/second/evidence plus `pending / mapped / created / skipped`. Mapping only links the mention to a product; it never edits the product. |
 | `assets` | One row per owned kit: `code` (`K7M2Q`, five random Crockford Base32 chars), `state` (pending / keep / displayed / stored / sold), purchase / build / sale facts and the review. |
-| `tags` | One physical sticker per bag (`R4TB9`). Every sticker has its own random code, never reused. |
+| `tags` | One physical sticker per bag (`R4TB9`). Every sticker has its own random code, never reused. Selling an asset sets `retired_at`: the sticker leaves the print queues and cannot be reprinted, but the row stays as history. |
 | `asset_state_changes` | Audit of state transitions; field edits are not recorded. |
+| `collections` | A human-defined set: title, description, intent (`planning / active / paused / abandoned`), optional dates. No difficulty column — that belongs in the description. |
+| `collection_items` | One existing product in a collection, plus a plan note. `product_id` is required and `ON DELETE CASCADE`: there are no placeholder targets. Progress is derived from `assets`; sold rows do not count and multiple copies count once. |
 
 ## Create products via API
 

@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
+from app.states import allowed_next_states
 
 
 class Product(Base):
@@ -19,6 +20,47 @@ class Product(Base):
     price: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     assets: Mapped[list[Asset]] = relationship(back_populates="product")
+
+
+class Collection(Base):
+    """A human-defined set of catalog products. The items are the scope."""
+    __tablename__ = "collections"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('planning', 'active', 'paused', 'abandoned')",
+            name="ck_collections_status",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(160), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), default="active", index=True)
+    started_on: Mapped[date | None] = mapped_column(Date)
+    target_on: Mapped[date | None] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    items: Mapped[list[CollectionItem]] = relationship(
+        back_populates="collection", cascade="all, delete-orphan"
+    )
+
+
+class CollectionItem(Base):
+    """One existing product in a collection. Nothing here is a placeholder."""
+    __tablename__ = "collection_items"
+    __table_args__ = (
+        UniqueConstraint("collection_id", "product_id", name="uq_collection_items_product"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    collection_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("collections.id", ondelete="CASCADE"), index=True
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    collection: Mapped[Collection] = relationship(back_populates="items")
+    product: Mapped[Product] = relationship()
 
 
 class ReviewItem(Base):
@@ -80,6 +122,11 @@ class Asset(Base):
         back_populates="asset", cascade="all, delete-orphan"
     )
 
+    @property
+    def allowed_next_states(self) -> list[str]:
+        """Read-only view of the state machine, so the UI never invents a move."""
+        return allowed_next_states(self.state)
+
 
 class AssetTag(Base):
     """One physical sticker, i.e. one bag. Code derives from the asset code."""
@@ -97,6 +144,9 @@ class AssetTag(Base):
     title: Mapped[str] = mapped_column(String(24), default="本体")
     # Last time this sticker came out of the printer; a reprint just moves it.
     printed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set when the asset is sold. A retired sticker leaves the print queues and
+    # cannot be reprinted, but the row stays as the history of the bag.
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     asset: Mapped[Asset] = relationship(back_populates="tags")
 

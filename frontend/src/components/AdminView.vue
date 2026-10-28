@@ -184,7 +184,7 @@ async function removeProduct() {
   if (editorMode.value !== 'edit' || !editing.value || busy.value) return
   const product = editing.value
   const linked = audit.value.length
-  if (!window.confirm(`删除「${product.kit_name}」？\n\n关联的 ${linked} 条审核记录会退回待审队列，产品字段会一并删除。`)) return
+  if (!window.confirm(`删除「${product.kit_name}」？\n\n关联的 ${linked} 条审核记录会退回待审队列，收藏集里的目标也会一起移除，产品字段会一并删除。`)) return
   busy.value = true
   try {
     const result = await api(`/api/v1/products/${product.id}`, { method: 'DELETE' })
@@ -230,7 +230,7 @@ loadProducts()
       <div>
         <p class="eyebrow">后台管理</p>
         <h1>产品管理</h1>
-        <p class="page-subtitle">新增、编辑或删除产品；删除时会把关联的审核记录退回待审。</p>
+        <p class="page-subtitle">新增、编辑或删除产品；删除时会把关联的审核记录退回待审，并从收藏集移除该目标。</p>
       </div>
       <div class="header-actions">
         <button class="secondary-button" type="button" :disabled="loading" @click="exportCsv"><Download :size="16" />导出 CSV</button>

@@ -1,8 +1,26 @@
 <script setup>
-import { Barcode, Building2, CalendarDays, ExternalLink, Tag, Wallet, X } from 'lucide-vue-next'
+import { ref, watch } from 'vue'
+import { Barcode, Building2, CalendarDays, ExternalLink, Tag, Trophy, Wallet, X } from 'lucide-vue-next'
 
-defineProps({ product: { type: Object, default: null } })
-defineEmits(['close'])
+const props = defineProps({ product: { type: Object, default: null } })
+const emit = defineEmits(['close', 'open-collection'])
+
+const collections = ref([])
+const loadingCollections = ref(false)
+
+watch(() => props.product?.id, async (id) => {
+  collections.value = []
+  if (!id) return
+  loadingCollections.value = true
+  try {
+    const response = await fetch(`/api/v1/products/${id}/collections`)
+    if (response.ok) collections.value = await response.json()
+  } catch {
+    /* the drawer's main job does not depend on this */
+  } finally {
+    loadingCollections.value = false
+  }
+}, { immediate: true })
 
 function formatDate(value) {
   return value ? new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date(value)) : '—'
@@ -35,9 +53,23 @@ function formatDate(value) {
           <h3>详情</h3>
           <p>{{ product.detail || '尚未补充产品详情。' }}</p>
         </section>
-        <div class="drawer-actions">
-          <button type="button" class="secondary-button" disabled title="资产模块仍为模拟功能"><ExternalLink :size="16" />关联资产</button>
-        </div>
+        <section class="detail-section">
+          <h3><Trophy :size="15" />所属收藏</h3>
+          <p v-if="loadingCollections" class="collection-empty">读取中…</p>
+          <div v-else-if="collections.length" class="collection-chips">
+            <button
+              v-for="collection in collections"
+              :key="collection.id"
+              type="button"
+              class="collection-chip"
+              @click="emit('open-collection', collection.id)"
+            >
+              <Trophy :size="13" />{{ collection.title }}
+              <span v-if="collection.owned" class="owned-mark">✓</span>
+            </button>
+          </div>
+          <p v-else class="collection-empty">尚未加入收藏集。</p>
+        </section>
       </aside>
     </div>
   </Transition>
@@ -45,4 +77,10 @@ function formatDate(value) {
 
 <style scoped>
 .source-text { overflow-wrap: anywhere; }
+.collection-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.collection-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; color: #2f554c; font-size: 12px; background: #f2f7f4; border: 1px solid #dbe7e0; border-radius: 999px; }
+.collection-chip:hover { color: #fff; background: #24705f; border-color: #24705f; }
+.owned-mark { color: #24705f; font-weight: 700; }
+.collection-chip:hover .owned-mark { color: #fff; }
+.collection-empty { margin: 0; color: #87938f; font-size: 12px; }
 </style>

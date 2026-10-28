@@ -1,5 +1,5 @@
 <script setup>
-import { Archive, Boxes, ClipboardCheck, ClipboardList, Heart, LayoutDashboard, Printer, Settings } from 'lucide-vue-next'
+import { Archive, Boxes, ClipboardCheck, ClipboardList, Heart, LayoutDashboard, Printer, Settings, Trophy } from 'lucide-vue-next'
 
 defineProps({
   active: { type: String, required: true },
@@ -14,6 +14,7 @@ const items = [
   { id: 'review', label: '入库审核', icon: ClipboardCheck },
   { id: 'admin', label: '后台管理', icon: Settings },
   { id: 'inventory', label: '我的资产', icon: Boxes },
+  { id: 'collections', label: '收藏集', icon: Trophy },
   { id: 'labels', label: '标签队列', icon: Printer },
   { id: 'wishlist', label: '愿望单', icon: Heart, mock: true },
   { id: 'activity', label: '活动记录', icon: ClipboardList, mock: true },

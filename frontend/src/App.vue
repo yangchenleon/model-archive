@@ -10,16 +10,43 @@ import AdminView from './components/AdminView.vue'
 import AssetView from './components/AssetView.vue'
 import LabelsView from './components/LabelsView.vue'
 import PrintView from './components/PrintView.vue'
+import CollectionsView from './components/CollectionsView.vue'
+import CollectionDetail from './components/CollectionDetail.vue'
 
-const SECTIONS = ['directory', 'review', 'admin', 'inventory', 'labels', 'print', 'wishlist', 'activity']
-const readHash = () => window.location.hash.replace('#', '')
-const activeSection = ref(SECTIONS.includes(readHash()) ? readHash() : 'directory')
-// The print sheet is a standalone route: it is opened from the label queue by
-// setting the hash, so the shell has to follow hash changes, not only emit them.
-window.addEventListener('hashchange', () => {
-  const section = readHash()
-  if (SECTIONS.includes(section) && section !== activeSection.value) activeSection.value = section
-})
+const SECTIONS = ['directory', 'review', 'admin', 'inventory', 'collections', 'labels', 'print', 'wishlist', 'activity']
+const activeSection = ref('directory')
+const collectionId = ref('')
+const selectedProduct = ref(null)
+
+function applyRoute() {
+  const [section, id = ''] = window.location.hash.replace('#', '').split('/')
+  activeSection.value = SECTIONS.includes(section) ? section : 'directory'
+  collectionId.value = activeSection.value === 'collections' ? id : ''
+  selectedProduct.value = null
+}
+
+function setRoute(section, id = '') {
+  const target = section === 'directory' ? '' : (id ? `${section}/${id}` : section)
+  if (window.location.hash.replace('#', '') === target) applyRoute()
+  else window.location.hash = target
+}
+
+function navigate(section) {
+  selectedProduct.value = null
+  setRoute(section)
+}
+
+function openCollection(id) {
+  selectedProduct.value = null
+  setRoute('collections', id)
+}
+
+function backToCollections() {
+  setRoute('collections')
+}
+
+applyRoute()
+window.addEventListener('hashchange', applyRoute)
 const products = ref([])
 const loading = ref(true)
 const loadError = ref('')
@@ -27,7 +54,6 @@ const search = ref('')
 const lineFilter = ref('')
 const makerFilter = ref('')
 const view = ref('grid')
-const selectedProduct = ref(null)
 const addDialogOpen = ref(false)
 const reviewPending = ref(0)
 const assets = ref([])
@@ -167,11 +193,6 @@ function onCreated(product) {
   selectedProduct.value = product
 }
 
-watch(activeSection, (section) => {
-  const target = section === 'directory' ? '' : section
-  if (readHash() !== target) window.location.hash = target
-})
-
 onMounted(() => {
   loadProducts()
   loadAssets()
@@ -182,7 +203,7 @@ onMounted(() => {
 <template>
   <PrintView v-if="activeSection === 'print'" />
   <div v-else class="app-shell">
-    <SidebarNav :active="activeSection" :total="products.length" :pending="reviewPending" @change="activeSection = $event" />
+    <SidebarNav :active="activeSection" :total="products.length" :pending="reviewPending" @change="navigate" />
 
     <main class="content">
       <section v-if="activeSection === 'directory'" class="directory-view">
@@ -225,6 +246,11 @@ onMounted(() => {
         <AssetView />
       </section>
 
+      <section v-else-if="activeSection === 'collections'" class="collections-section">
+        <CollectionDetail v-if="collectionId" :collection-id="collectionId" @back="backToCollections" />
+        <CollectionsView v-else @open="openCollection" />
+      </section>
+
       <section v-else-if="activeSection === 'labels'" class="labels-section">
         <LabelsView />
       </section>
@@ -238,7 +264,7 @@ onMounted(() => {
     </main>
   </div>
 
-  <ProductDrawer :product="selectedProduct" @close="selectedProduct = null" />
+  <ProductDrawer :product="selectedProduct" @close="selectedProduct = null" @open-collection="openCollection" />
   <p v-if="toast" class="app-toast" :class="{ 'is-error': toastError }">{{ toast }}</p>
   <AddProductDialog :open="addDialogOpen" @close="addDialogOpen = false" @created="onCreated" />
 </template>

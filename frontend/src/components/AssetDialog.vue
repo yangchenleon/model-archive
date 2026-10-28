@@ -14,12 +14,13 @@ const STATE_META = {
   stored: '收纳',
   sold: '卖出',
 }
-const NEXT_ACTIONS = {
-  pending: [['displayed', '拼完了'], ['keep', '收藏']],
-  keep: [['pending', '改回待拼']],
-  displayed: [['stored', '收纳'], ['sold', '卖出']],
-  stored: [['displayed', '取出展示'], ['sold', '卖出']],
-  sold: [],
+// Labels only. Which moves are legal comes from the API (`allowed_next_states`),
+// so the drawer and the bulk bar cannot drift apart.
+const ACTION_LABELS = {
+  pending: { displayed: '拼完了', keep: '收藏', sold: '卖出' },
+  keep: { pending: '改回待拼', sold: '卖出' },
+  displayed: { stored: '收纳', sold: '卖出' },
+  stored: { displayed: '取出展示', sold: '卖出' },
 }
 
 const PRESETS = ['本体', '余件', '地台', '配件包']
@@ -31,7 +32,10 @@ const message = ref('')
 const messageError = ref(false)
 
 const asset = computed(() => props.asset)
-const actions = computed(() => NEXT_ACTIONS[asset.value?.state] || [])
+const actions = computed(() => (asset.value?.allowed_next_states || []).map((value) => [
+  value,
+  ACTION_LABELS[asset.value.state]?.[value] || STATE_META[value] || value,
+]))
 
 function flash(text, isError = false) {
   message.value = text
@@ -113,6 +117,10 @@ async function moveTo(state) {
 
 async function addTag() {
   if (busy.value || !asset.value) return
+  if (asset.value.state === 'sold') {
+    flash('已卖出的资产不能加标签', true)
+    return
+  }
   const title = draftTitle.value.trim()
   if (!title) {
     flash('袋名不能为空', true)
@@ -134,7 +142,7 @@ async function addTag() {
 
 async function remove() {
   if (busy.value) return
-  if (!window.confirm(`删除资产 ${asset.value.code}？\n\n编号不会回收，已打印的标签会变成历史。`)) return
+  if (!window.confirm(`删除资产 ${asset.value.code}？\n\n编号不会回收，标签和状态记录会一起删除。`)) return
   busy.value = true
   try {
     await api(`/api/v1/assets/${asset.value.id}`, { method: 'DELETE' })
@@ -162,7 +170,7 @@ async function remove() {
 
         <div class="state-row">
           <button v-for="[value, label] in actions" :key="value" class="secondary-button" type="button" :disabled="busy" @click="moveTo(value)">{{ label }}</button>
-          <span v-if="!actions.length" class="sub">已卖出，无后续动作</span>
+          <span v-if="asset.state === 'sold'" class="sub">已卖出，标签已作废，无后续动作</span>
         </div>
 
         <section class="field-section">
@@ -180,7 +188,7 @@ async function remove() {
           <div class="save-row"><button class="primary-button" type="button" :disabled="busy" @click="save"><Save :size="16" />保存</button></div>
         </section>
 
-        <section class="field-section">
+        <section v-if="asset.state !== 'sold'" class="field-section">
           <header class="section-head">
             <h3>再加一个袋</h3>
             <span class="sub">地台、配件包在这里补；码按 -2、-3 往下排</span>
@@ -194,6 +202,9 @@ async function remove() {
               <button class="secondary-button" type="button" :disabled="busy" @click="addTag">加一个</button>
             </div>
           </div>
+        </section>
+        <section v-else class="field-section">
+          <p class="sub">标签已随卖出作废：不再进入打印队列，也不能加袋或重打。</p>
         </section>
 
         <section class="field-section">
