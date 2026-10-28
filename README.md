@@ -14,6 +14,7 @@ docker compose up --build -d
 - Product archive frontend: <http://localhost:5173>
 - Deploy to another host + import a database dump: [docs/deploy-and-restore.md](docs/deploy-and-restore.md)
 - Manufacturer directory and manufacturer-table assessment: [docs/manufacturer-normalization.md](docs/manufacturer-normalization.md)
+- Manufacturer/line taxonomy proposal (categories, tiers, product-line table): [docs/manufacturer-and-line-taxonomy.md](docs/manufacturer-and-line-taxonomy.md)
 
 Adminer connection details: system `PostgreSQL`, server `db`, and the database/user/password from `.env`.
 
