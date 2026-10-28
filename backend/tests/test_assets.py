@@ -136,6 +136,20 @@ def test_codes_are_unique_across_a_batch(client, product):
     assert all(CODE_RE.match(code) for code in codes)
 
 
+def test_allocator_skips_codes_already_in_use(client, product, monkeypatch):
+    taken = make_asset(client, product)["code"]
+
+    from app.services import codes
+
+    # Pretend the generator keeps handing out a used code before finding a free one.
+    sequence = iter([taken, taken, "ZZZZZ"])
+    monkeypatch.setattr(codes, "new_code", lambda: next(sequence))
+
+    created = client.post("/api/v1/assets", json={"product_id": product["id"], "state": "pending"})
+    assert created.status_code == 201
+    assert created.json()["code"] == "ZZZZZ"
+
+
 def test_lookup_by_code_tolerates_typed_variants(client, product):
     asset = make_asset(client, product)
     tag = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "本体"}).json()
