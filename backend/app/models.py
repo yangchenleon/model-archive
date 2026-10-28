@@ -111,6 +111,8 @@ class AssetStateChange(Base):
     asset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("assets.id", ondelete="CASCADE"), index=True)
     from_state: Mapped[str | None] = mapped_column(String(16))
     to_state: Mapped[str] = mapped_column(String(16))
-    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # clock_timestamp(), not now(): an audit row is stamped when it is written,
+    # so two transitions in one transaction keep their order.
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
     note: Mapped[str | None] = mapped_column(Text)
     asset: Mapped[Asset] = relationship(back_populates="state_changes")
