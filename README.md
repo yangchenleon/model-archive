@@ -64,6 +64,16 @@ It downloads a Bilibili source, extracts audio, runs ASR, and asks an optional
 OpenAI-compatible LLM to produce reviewable CSV rows. Those rows are not imported
 by this project — adapt them to the API above if needed.
 
+## Tests
+
+```bash
+cd backend
+../.venv/bin/python -m pytest tests -q
+```
+
+The suite talks to the dev database on `localhost:15432` and rolls every test
+back, so it leaves no rows behind.
+
 ## Useful commands
 
 ```bash

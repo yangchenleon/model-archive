@@ -45,6 +45,21 @@
 
 `collection_targets` 已删除。收藏分组、愿望单、纳入/跳过规则都属于未来的独立功能，不再混入产品目录。
 
+## 代码结构
+
+```text
+backend/app/
+  main.py      组装：注册路由、把领域错误映射成 HTTP 状态码
+  api/         URL 与入参：products / review / assets / tags / media
+  services/    规则：重复判定、状态迁移与审计、标签编号与重打
+  models.py    表
+  schemas.py   出入参
+```
+
+规则和 HTTP 分离：services 抛 `NotFound / Conflict / Invalid`，`main.py` 里一个 handler
+统一映射成 404 / 409 / 422；路由只负责解析参数和拼查询。这样同一套规则可以被多个入口
+（单条、批量、将来的 CLI 导入器）复用，不需要复制一遍判断。
+
 ## 写入原则
 
 1. 产品只通过 API 写入：`POST /api/v1/products`（单条）或 `/api/v1/products/bulk`（批量，全成全败）；前端后台管理也是调用这两个接口。
