@@ -30,6 +30,7 @@ const view = ref('grid')
 const selectedProduct = ref(null)
 const addDialogOpen = ref(false)
 const reviewPending = ref(0)
+const assets = ref([])
 const toast = ref('')
 const toastError = ref(false)
 
@@ -128,6 +129,23 @@ function flash(text, isError = false) {
   flash.timer = window.setTimeout(() => { toast.value = '' }, 3000)
 }
 
+async function loadAssets() {
+  try {
+    const response = await fetch('/api/v1/assets?limit=500')
+    if (response.ok) assets.value = await response.json()
+  } catch {
+    /* 卡片上的“已入”只是提示，失败不阻塞目录 */
+  }
+}
+
+const ownedByProduct = computed(() => {
+  const counts = new Map()
+  for (const asset of assets.value) {
+    counts.set(asset.product_id ?? asset.product?.id, (counts.get(asset.product_id ?? asset.product?.id) || 0) + 1)
+  }
+  return counts
+})
+
 async function ownProduct(product) {
   try {
     const response = await fetch('/api/v1/assets', {
@@ -137,6 +155,7 @@ async function ownProduct(product) {
     })
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.detail || `请求失败 (${response.status})`)
+    assets.value.push(body)
     flash(`${product.kit_name} → ${body.code}（待拼）`)
   } catch (exc) {
     flash(exc.message, true)
@@ -155,6 +174,7 @@ watch(activeSection, (section) => {
 
 onMounted(() => {
   loadProducts()
+  loadAssets()
   loadReviewPending()
 })
 </script>
@@ -189,7 +209,7 @@ onMounted(() => {
 
         <section v-if="loading" class="state-panel"><LoaderCircle class="spin" :size="26" /><p>正在读取产品目录...</p></section>
         <section v-else-if="loadError" class="state-panel error-state"><p>{{ loadError }}</p><button class="secondary-button" type="button" @click="loadProducts"><RefreshCw :size="16" />重新加载</button></section>
-        <section v-else-if="filteredProducts.length" class="products" :class="`view-${view}`"><ProductCard v-for="product in filteredProducts" :key="product.id" :product="product" :view="view" @select="selectedProduct = $event" @own="ownProduct" /></section>
+        <section v-else-if="filteredProducts.length" class="products" :class="`view-${view}`"><ProductCard v-for="product in filteredProducts" :key="product.id" :product="product" :view="view" :owned="ownedByProduct.get(product.id) || 0" @select="selectedProduct = $event" @own="ownProduct" /></section>
         <section v-else class="state-panel"><p>没有符合条件的产品。</p><button class="secondary-button" type="button" @click="resetFilters">清除筛选</button></section>
       </section>
 
