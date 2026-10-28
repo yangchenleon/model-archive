@@ -32,9 +32,14 @@
 （`pending / mapped / created / skipped`）。`mapped` 只记录“这条 mention 属于哪个产品”，
 不修改产品；产品字段修正走后端管理页。
 
-### `assets` 与 `asset_events`
+### `assets`、`tags` 与 `asset_state_changes`
 
-这两张表暂时保留为后续设计空间，但**当前没有导入器、API 写入流程或用户模板**。未来资产应以 `assets.product_id -> products.id` 关联；事件应以 `asset_events.asset_id -> assets.id` 关联。
+资产按“一台一份”记录：`assets` 保存状态与买入/拼装/卖出的事实字段，`tags` 保存物理贴纸（一张贴纸＝一个袋，
+码从资产码派生），`asset_state_changes` 只审计状态变动。设计取舍（为什么没有通用事件表）见
+[asset-and-labels.md](asset-and-labels.md)。
+
+`asset_events` 已删除：`rating` 只属于拼装、`amount` 只属于买卖，挂在同一个 `kind` 上会让每行带着一堆
+永远为空的列。资产生命周期是线性的，买、拼、卖各发生一次，所以它们是列而不是行。
 
 ## 已删除的设计
 
@@ -50,4 +55,10 @@
 
 ## 下一阶段
 
-目录确认后，先定义资产的“逐盒还是数量聚合”“资产状态变更”“存放位置”和“产品选择器”规则，再实现资产表单与导入。愿望单/收藏功能在资产稳定后单独建模。
+资产已落地（表、接口、`/#inventory` 页面）。下一步是把标签渲染接到页面：现在只能在队列里看到待贴的码，
+还不能一键出纸。设计稿见 [asset-and-labels.md](asset-and-labels.md)。
+
+位置尚未固定，所以**不做**容器/摆放模型；等“某个箱子固定放某几台、并且要按位置找东西”时再加，
+用已有的 `assets.id` 关联，标签不用重贴。
+
+愿望单/收藏分组仍是独立功能，在资产稳定后单独建模。

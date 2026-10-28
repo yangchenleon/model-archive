@@ -17,7 +17,7 @@ Adminer connection details: system `PostgreSQL`, server `db`, and the database/u
 
 ## Frontend
 
-The Vue frontend reads the product directory through `/api/v1/products`; product filters and the product detail panel therefore use live database data. Two working pages sit beside the catalog: **入库审核** (`/#review`) turns extracted mentions into products (map / create / skip, with video deep links), and **后台管理** (`/#admin`) edits/deletes products through transactional API calls (deleting a product returns linked review items to the queue). See [docs/review-workflow.md](docs/review-workflow.md). Asset inventory, wish list, and activity pages are explicitly marked frontend mockups until those modules are designed.
+The Vue frontend reads the product directory through `/api/v1/products`; product filters and the product detail panel therefore use live database data. Three working pages sit beside the catalog: **入库审核** (`/#review`) turns extracted mentions into products (map / create / skip, with video deep links), **后台管理** (`/#admin`) edits/deletes products through transactional API calls (deleting a product returns linked review items to the queue), and **我的资产** (`/#inventory`) records owned kits, their state, and the stickers that go on the storage bags. See [docs/review-workflow.md](docs/review-workflow.md) and [docs/asset-and-labels.md](docs/asset-and-labels.md). Wish list and activity pages are still frontend mockups.
 
 For frontend-only development:
 
@@ -33,8 +33,9 @@ npm run dev
 | --- | --- |
 | `products` | The product catalog: maker, code, line, name, detail, source, free-text `price`, `created_at`. No status or history columns. |
 | `review_items` | Persistent ingestion audit queue from `outputs/products/products.json`: source video/second/evidence plus `pending / mapped / created / skipped`. Mapping only links the mention to a product; it never edits the product. |
-| `assets` | Reserved for future physical-inventory work; currently no user import flow. |
-| `asset_events` | Reserved for future asset history. |
+| `assets` | One row per owned kit: `code` (`M-014`), `state` (pending / keep / displayed / stored / sold), purchase / build / sale facts and the review. |
+| `tags` | One physical sticker per bag (`M-014`, `M-022-2`). Codes derive from the asset code and are never reused. |
+| `asset_state_changes` | Audit of state transitions; field edits are not recorded. |
 
 ## Create products via API
 
