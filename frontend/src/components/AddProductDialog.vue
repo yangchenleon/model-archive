@@ -2,7 +2,10 @@
 import { reactive, ref, watch } from 'vue'
 import { LoaderCircle, Plus, X } from 'lucide-vue-next'
 
-const props = defineProps({ open: { type: Boolean, required: true } })
+const props = defineProps({
+  open: { type: Boolean, required: true },
+  defaultManufacturer: { type: String, default: '' },
+})
 const emit = defineEmits(['close', 'created'])
 
 const form = reactive({
@@ -17,7 +20,9 @@ const submitting = ref(false)
 const error = ref('')
 
 watch(() => props.open, (open) => {
-  if (open) error.value = ''
+  if (!open) return
+  error.value = ''
+  if (props.defaultManufacturer) form.manufacturer = props.defaultManufacturer
 })
 
 function valueOrNull(value) {

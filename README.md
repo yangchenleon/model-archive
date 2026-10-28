@@ -13,12 +13,13 @@ docker compose up --build -d
 - Database browser (Adminer): <http://localhost:18080>
 - Product archive frontend: <http://localhost:5173>
 - Deploy to another host + import a database dump: [docs/deploy-and-restore.md](docs/deploy-and-restore.md)
+- Manufacturer directory and manufacturer-table assessment: [docs/manufacturer-normalization.md](docs/manufacturer-normalization.md)
 
 Adminer connection details: system `PostgreSQL`, server `db`, and the database/user/password from `.env`.
 
 ## Frontend
 
-The Vue frontend reads the product directory through `/api/v1/products`; product filters and the product detail panel therefore use live database data. Working pages sit beside the catalog: **入库审核** (`/#review`) turns extracted mentions into products (map / create / skip, with video deep links), **后台管理** (`/#admin`) edits/deletes products through transactional API calls (deleting a product returns linked review items to the queue), **我的资产** (`/#inventory`) records owned kits, their state, and the stickers that go on the storage bags, and **收藏集** (`/#collections`) compares a human-defined product list against those assets. See [docs/review-workflow.md](docs/review-workflow.md), [docs/asset-and-labels.md](docs/asset-and-labels.md), and [docs/collection-system.md](docs/collection-system.md). Wish list and activity pages are still frontend mockups.
+The Vue frontend reads the product directory through `/api/v1/products`; the directory is now manufacturer-first (`/#directory` shows a manufacturer menu, then products grouped under that maker, with product lines as secondary chips). Working pages sit beside the catalog: **入库审核** (`/#review`) turns extracted mentions into products (map / create / skip, with video deep links), **后台管理** (`/#admin`) edits/deletes products through transactional API calls (deleting a product returns linked review items to the queue), **我的资产** (`/#inventory`) records owned kits, their state, and the stickers that go on the storage bags, and **收藏集** (`/#collections`) compares a human-defined product list against those assets. See [docs/review-workflow.md](docs/review-workflow.md), [docs/asset-and-labels.md](docs/asset-and-labels.md), and [docs/collection-system.md](docs/collection-system.md). Wish list and activity pages are still frontend mockups.
 
 For frontend-only development:
 

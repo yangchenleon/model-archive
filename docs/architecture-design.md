@@ -80,8 +80,9 @@ backend/app/
 
 ## 下一阶段
 
-资产、标签、收藏集已落地（`/#inventory`、`/#labels`、`/#collections`）。下一步看实际使用：产品目录质量、
-收藏集的机体级分组等。
+资产、标签、收藏集已落地（`/#inventory`、`/#labels`、`/#collections`），产品目录已改为厂家优先
+（`/#directory`）。下一步按 [manufacturer-normalization.md](manufacturer-normalization.md) 做厂家表与
+`products.manufacturer_id` 规范化，再考虑收藏集的机体级分组。
 
 位置尚未固定，所以**不做**容器/摆放模型；等“某个箱子固定放某几台、并且要按位置找东西”时再加，
 用已有的 `assets.id` 关联，标签不用重贴。
