@@ -6,31 +6,34 @@ import { ArrowLeft, LoaderCircle, Printer } from 'lucide-vue-next'
 // anything printed) so the layout can be judged on screen.
 const preview = new URLSearchParams(window.location.search).has('preview')
 const PREVIEW_SAMPLE = [
-  { id: 'p1', code: 'K7M2Q', title: '本体', kit_name: '灵枪·马尔洛克', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
+  { id: 'p1', code: 'DVG1D', title: '本体', kit_name: 'MB 红异端改战术复合武装（飞行背包）', manufacturer: '大班', product_line: '88系列' },
   { id: 'p2', code: 'R4TB9', title: '本体', kit_name: '神器共鸣者·帕西瓦尔（豪华版）', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
   { id: 'p3', code: 'W8NZ3', title: '地台', kit_name: '雷鸣收割者·格雷斯', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
   { id: 'p4', code: 'C5PV7', title: '本体', kit_name: '灵皇守护者·高文（KK版）', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
-  { id: 'p5', code: 'H2QD8', title: '余件', kit_name: '钢镰·凯', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
+  { id: 'p5', code: 'PMZXX', title: '本体', kit_name: '巨鸣斧·兰斯洛特', manufacturer: 'SNAA', product_line: '圆桌骑士团系列' },
 ]
 const tags = ref([])
 const loading = ref(true)
 const error = ref('')
 const status = ref('')
 
-function splitName(name) {
-  if (!name) return { main: '—', sub: null }
-  const head = name.split('（')[0]
-  if (head.includes('&')) {
-    const [main, tail] = head.split('&')
-    return { main: main.trim(), sub: tail.trim() || null }
-  }
-  const match = name.match(/^(.*?)（([^）]*)）/s)
-  const sub = match ? match[2].split(/[、,，]/)[0].trim() : null
-  return { main: head.trim(), sub: sub || null }
+// 优化标点符号避头尾，避免斜杠 / 或左括号（ 留在行末，同时保持中英文自然连排
+function formatKitName(name) {
+  if (!name) return '—'
+  return name
+    .trim()
+    // 防止英文与汉字之间的空格导致整串汉字提前换行（转为不间断空格或微距）
+    .replace(/([A-Za-z0-9])\s+(?=[\u4e00-\u9fa5])/g, '$1\u00A0')
+    // 斜杠、& 符号后方锁死不断行，避免留在行末
+    .replace(/\s*([/&／])\s*/g, '\u200B$1\u2060')
+    // 中点 · 紧贴前字，避免出现在行首
+    .replace(/·/g, '\u2060·\u200B')
+    // 左括号后锁死不断行（禁止左括号在行末）
+    .replace(/([（(])/g, '$1\u2060')
+    // 右括号前锁死不断行（禁止右括号在行首）
+    .replace(/([）)])/g, '\u2060$1')
 }
 
-// The badge carries the bag name; the style only encodes the common presets so
-// the three kinds stay distinguishable in pure black and white.
 function badgeClass(title) {
   const value = title || '本体'
   if (value === '本体') return 'role-body'
@@ -39,11 +42,9 @@ function badgeClass(title) {
 }
 
 const labels = computed(() => tags.value.map((tag) => {
-  const { main, sub } = splitName(tag.kit_name)
   return {
     ...tag,
-    main,
-    sub,
+    displayName: formatKitName(tag.kit_name),
     productLine: tag.product_line || '',
     badge: tag.title || '本体',
     badgeClass: badgeClass(tag.title),
@@ -67,7 +68,7 @@ async function load() {
     const response = await fetch('/api/v1/tags?status=open&limit=2000')
     const all = await response.json()
     tags.value = all.filter((tag) => ids.has(tag.id))
-    if (!tags.value.length) error.value = '选中的标签已经打印过，去标签队列的「已打印」里重新打印。'
+    if (!tags.value.length) error.value = '选中的标签已不在待打印队列，刷新标签队列后再试。'
   } catch (exc) {
     error.value = `读取失败：${exc.message}`
   } finally {
@@ -111,7 +112,6 @@ onMounted(async () => {
   await load()
   if (preview || !tags.value.length) return
   await waitForImages()
-  // Give the browser a beat to finish layout before opening the dialog.
   window.setTimeout(doPrint, 300)
 })
 </script>
@@ -140,20 +140,22 @@ onMounted(async () => {
           <span class="badge" :class="label.badgeClass">{{ label.badge }}</span>
         </header>
 
-        <!-- 2. 下部主区：左侧机体名+编号，右侧二维码 -->
+        <!-- 2. 主体区：类 Word 文本框四周环绕排版 -->
         <div class="label-body">
-          <div class="info-col">
-            <div class="title-group">
-              <div class="title">{{ label.main }}</div>
-              <div v-if="label.sub" class="sub">{{ label.sub }}</div>
-            </div>
-            <div class="code-box">
-              <strong class="code">{{ label.code }}</strong>
-            </div>
+          <!-- 右上角隐形撑开器（宽度为0，把二维码推到右下角，释放二维码上方的全部横向空间给第1~2行标题） -->
+          <div class="qr-spacer"></div>
+
+          <!-- 右下角二维码框（浮动在右下角，第3~4行长文字会自动环绕在它的左侧、即编码的上方） -->
+          <div class="qr-box">
+            <img class="qr" :src="`/api/v1/qr?data=${encodeURIComponent(label.code)}`" alt="" />
           </div>
 
-          <div class="qr-col">
-            <img class="qr" :src="`/api/v1/qr?data=${encodeURIComponent(label.code)}`" alt="" />
+          <!-- 机体名称（自然流式环绕：前两行全宽，第三四行自动缩进填满编码上方空白） -->
+          <div class="title">{{ label.displayName }}</div>
+
+          <!-- 左下角编码框（固定在左下角） -->
+          <div class="code-box">
+            <strong class="code">{{ label.code }}</strong>
           </div>
         </div>
       </article>
@@ -185,7 +187,6 @@ onMounted(async () => {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   width: 40mm;
   height: 30mm;
   padding: 2mm 2.2mm;
@@ -197,13 +198,13 @@ onMounted(async () => {
   break-inside: avoid;
 }
 
-/* --- 1. 顶部栏：厂商 + 角色徽章 --- */
+/* --- 1. 顶部栏：恢复原尺寸（2.1mm / 2.0mm）确保「SNAA·圆桌骑士团系列」完整显示 --- */
 .label-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1mm;
-  padding-bottom: 1.1mm;
+  padding-bottom: 1mm;
   border-bottom: 0.35mm solid #000;
   flex: 0 0 auto;
 }
@@ -214,7 +215,8 @@ onMounted(async () => {
   gap: 0.6mm;
   overflow: hidden;
   white-space: nowrap;
-  font-size: 2.1mm;
+  /* 最初是 2.1mm，这里设为 2.15mm 刚好完整放下「SNAA · 圆桌骑士团系列」 */
+  font-size: 2.15mm;
   line-height: 1.1;
 }
 
@@ -235,10 +237,10 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-/* 部位徽章：利用黑白框区分不同类型（全黑白打印也极易分辨） */
 .badge {
   flex: 0 0 auto;
   padding: 0.4mm 1mm;
+  /* 恢复最初的 2mm */
   font-size: 2mm;
   font-weight: 800;
   line-height: 1;
@@ -247,7 +249,6 @@ onMounted(async () => {
   border: 0.3mm solid #000;
   border-radius: 0.5mm;
 }
-/* 余件采用反白空心框，地台采用斜纹/粗框感，方便肉眼一秒分拣 */
 .badge.role-extras {
   color: #000;
   background: #fff;
@@ -258,92 +259,77 @@ onMounted(async () => {
   border-style: dashed;
 }
 
-/* --- 2. 下部主区：左文右码 --- */
+/* --- 2. 下部主区：Word 式四周文本环绕布局 --- */
 .label-body {
-  display: flex;
+  position: relative;
   flex: 1;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 1.5mm;
-  padding-top: 1.3mm;
+  padding-top: 1.2mm;
   overflow: hidden;
 }
 
-.info-col {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: space-between;
-  min-width: 0;
-   overflow: hidden;
+/* 顶部隐形推块：宽度为 0，高度约等于前 2 行文字（8.2mm），把下方的二维码精准推到右下角 */
+.qr-spacer {
+  float: right;
+  width: 0;
+  height: 8.2mm;
 }
 
-.title-group {
+/* 右下角正方形二维码框：紧贴在推块下方（即右下角），文字流到这里会自动绕开它 */
+.qr-box {
+  float: right;
+  clear: right;
+  width: 12mm;
+  height: 12mm;
+  margin-left: 1.2mm;
+  margin-top: 0.3mm;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.7mm;
+  align-items: center;
+  justify-content: center;
 }
 
+.qr {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: pixelated;
+}
+
+/* 机体名称：
+   - 第 1~2 行：占满整张标签宽度（约 21~22 个字）
+   - 第 3~4 行：自动环绕在二维码左侧、填满编码上方的空白（额外多容纳 12~14 个字，总计可容纳 35 字以上！） */
 .title {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2; /* 允许最多两行，防止长机体名被截断 */
-  overflow: hidden;
-  font-size: 3.3mm;
+  font-size: 3.2mm;
   font-weight: 800;
-  line-height: 1.18;
-  /* 中文按字断行，拉丁词不拆；两行时尽量平衡，避免出现「高」+「文」这种孤字 */
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-  text-wrap: balance;
-}
-
-.sub {
-  display: inline-block;
-  max-width: 100%;
-  padding: 0.25mm 0.8mm;
+  line-height: 1.25;
+  /* 关键修复：使用 normal 而不是 keep-all，防止 MB 后面跟一长串汉字时直接断行 */
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-break: strict;
+  /* 限制最大高度，避免极端超长文本压到左下角的编码（16mm 足够排下完整 4 行） */
+  max-height: 16mm;
   overflow: hidden;
-  font-size: 2.1mm;
-  font-weight: 600;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: 0.25mm solid #000;
-  border-radius: 0.4mm;
 }
 
+/* 左下角编码框：固定在左下角，背景兜底防重叠 */
 .code-box {
-  padding-top: 0.6mm;
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  background: #fff;
+  padding-right: 1mm;
+  padding-top: 0.4mm;
 }
 
 .code {
   display: block;
-  overflow: hidden;
   font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace;
-  font-size: 3.4mm;
+  font-size: 3.5mm;
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.05mm;
   white-space: nowrap;
-}
-
-/* 右下角二维码区域 */
-.qr-col {
-  display: flex;
-  flex: 0 0 auto;
-   flex-direction: column;
-  justify-content: flex-end;
-}
-
-.qr {
-   display: block;
-  width: 12mm;
-  height: 12mm;
-  object-fit: contain;
-  /* 确保二维码像素边缘锐利，热敏打印不发虚 */
-  image-rendering: -moz-crisp-edges;
-  image-rendering: pixelated;
 }
 
 @media print {
@@ -353,11 +339,5 @@ onMounted(async () => {
   .label { outline: none; }
 }
 
-/* 默认：A4 不干胶拼版打印 (每行 5 张: 5 * 40mm = 200mm) */
 @page { size: A4; margin: 5mm; }
-
-/* 💡 如果你使用的是 40x30mm 独立热敏标签打印机（如佳博、精臣、得力等），
-   可以把上面的 .sheet 宽度设为 40mm，并将 @page 替换为下面这行：
-   @page { size: 40mm 30mm; margin: 0; }
-*/
 </style>

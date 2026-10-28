@@ -50,11 +50,12 @@ def issue(session: Session, asset_id: UUID, title: str | None) -> AssetTag:
     return tag
 
 
-def issue_first(session: Session, payload: BulkTagCreate) -> list[AssetTag]:
-    """Hand one sticker to every asset that has none yet.
+def requeue(session: Session, payload: BulkTagCreate) -> list[AssetTag]:
+    """Put the selected assets back in the print queue.
 
-    Assets that already carry a sticker are skipped: regenerating for them would
-    mean a second bag, which is an explicit, per-asset decision.
+    An asset without a sticker gets one; an asset that already has stickers has
+    them marked unprinted again, keeping their codes — a reprint is the same
+    sticker, and the asset page does not need to know which case it hit.
     """
     value = clean_title(payload.title)
     assets = list(session.scalars(
@@ -65,17 +66,23 @@ def issue_first(session: Session, payload: BulkTagCreate) -> list[AssetTag]:
     if missing:
         raise NotFound(f"资产不存在：{missing[0]}")
 
-    pending = [asset for asset in assets if not asset.tags]
-    issued = codes.issue(session, len(pending))
-    created = [
+    fresh = [asset for asset in assets if not asset.tags]
+    issued = codes.issue(session, len(fresh))
+    session.add_all([
         AssetTag(asset_id=asset.id, seq=1, code=code, title=value)
-        for asset, code in zip(pending, issued)
-    ]
-    session.add_all(created)
+        for asset, code in zip(fresh, issued)
+    ])
+
+    for asset in assets:
+        for tag in asset.tags:
+            tag.printed_at = None
+
     session.commit()
-    for tag in created:
-        session.refresh(tag)
-    return created
+    return list(session.scalars(
+        select(AssetTag)
+        .where(AssetTag.asset_id.in_([asset.id for asset in assets]))
+        .order_by(AssetTag.created_at, AssetTag.code)
+    ))
 
 
 def rename(session: Session, tag_id: UUID, title: str) -> AssetTag:

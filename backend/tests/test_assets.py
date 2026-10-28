@@ -79,13 +79,32 @@ def test_each_bag_gets_its_own_code(client, product):
     assert [tag["title"] for tag in (first, second, third)] == ["本体", "配件包 2", "地台"]
 
 
-def test_bulk_tags_skips_assets_that_already_have_one(client, product):
-    asset = make_asset(client, product)
-    client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "本体"})
+def test_bulk_tags_puts_assets_back_in_the_queue(client, product):
+    # No sticker yet: the bulk action issues one.
+    fresh = make_asset(client, product)
+    issued = client.post("/api/v1/assets/bulk/tags", json={"asset_ids": [fresh["id"]]}).json()
+    assert len(issued) == 1
+    assert issued[0]["printed_at"] is None
 
-    response = client.post("/api/v1/assets/bulk/tags", json={"asset_ids": [asset["id"]]})
-    assert response.status_code == 201
-    assert response.json() == []
+    # Printed once, then selected again: the same sticker returns to the queue.
+    client.post("/api/v1/tags/bulk/printed", json={"tag_ids": [issued[0]["id"]]})
+    again = client.post("/api/v1/assets/bulk/tags", json={"asset_ids": [fresh["id"]]}).json()
+    assert [tag["code"] for tag in again] == [issued[0]["code"]]
+    assert all(tag["printed_at"] is None for tag in again)
+
+    open_codes = [t["code"] for t in client.get("/api/v1/tags?status=open").json()]
+    assert issued[0]["code"] in open_codes
+
+
+def test_bulk_tags_requeues_every_bag_of_an_asset(client, product):
+    asset = make_asset(client, product)
+    first = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "本体"}).json()
+    second = client.post(f"/api/v1/assets/{asset['id']}/tags", json={"title": "地台"}).json()
+    client.post("/api/v1/tags/bulk/printed", json={"tag_ids": [first["id"], second["id"]]})
+
+    back = client.post("/api/v1/assets/bulk/tags", json={"asset_ids": [asset["id"]]}).json()
+    assert sorted(tag["code"] for tag in back) == sorted([first["code"], second["code"]])
+    assert all(tag["printed_at"] is None for tag in back)
 
 
 def test_tag_title_is_validated_and_renamable(client, product):

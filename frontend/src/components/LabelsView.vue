@@ -7,7 +7,6 @@ const loading = ref(true)
 const error = ref('')
 const search = ref('')
 const selected = ref([])
-const tab = ref('open')
 const message = ref('')
 const messageError = ref(false)
 
@@ -40,7 +39,7 @@ async function loadQueue() {
   loading.value = true
   error.value = ''
   try {
-    queue.value = await api(`/api/v1/tags?status=${tab.value}`)
+    queue.value = await api('/api/v1/tags?status=open')
   } catch (exc) {
     error.value = `标签队列读取失败：${exc.message}`
   } finally {
@@ -77,13 +76,6 @@ function toggle(id) {
   else selected.value.push(id)
 }
 
-function switchTab(next) {
-  if (tab.value === next) return
-  tab.value = next
-  selected.value = []
-  loadQueue()
-}
-
 function toggleAll() {
   selected.value = allChecked.value ? [] : filtered.value.map((tag) => tag.id)
 }
@@ -114,10 +106,7 @@ onMounted(loadQueue)
     <section class="toolbar">
       <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索标签码、资产编号、模型名" /></label>
       <span class="result-count">{{ selected.length ? `已选 ${selected.length} 张` : `${filtered.length} 张` }}</span>
-      <div class="view-switch">
-        <button :class="{ selected: tab === 'open' }" type="button" @click="switchTab('open')">待打印</button>
-        <button :class="{ selected: tab === 'printed' }" type="button" @click="switchTab('printed')">已打印</button>
-      </div>
+
     </section>
 
     <p v-if="loading" class="state-panel"><LoaderCircle class="spin" :size="24" />正在读取队列…</p>
@@ -132,7 +121,7 @@ onMounted(loadQueue)
             <th>资产</th>
             <th>产品</th>
             <th>厂商</th>
-            <th>{{ tab === 'open' ? '生成' : '最近打印' }}</th>
+            <th>生成</th>
           </tr>
         </thead>
         <tbody>
@@ -151,14 +140,14 @@ onMounted(loadQueue)
             <td class="code">{{ tag.asset_code }}</td>
             <td class="name">{{ tag.kit_name }}</td>
             <td class="maker">{{ tag.manufacturer || '—' }}</td>
-            <td class="date">{{ ((tab === 'open' ? tag.created_at : tag.printed_at) || '').slice(0, 10) || '—' }}</td>
+            <td class="date">{{ (tag.created_at || '').slice(0, 10) }}</td>
           </tr>
         </tbody>
       </table>
     </div>
     <div v-else class="state-panel">
       <Printer :size="26" />
-      <p>{{ queue.length ? '没有符合条件的标签。' : (tab === 'open' ? '队列是空的。去「我的资产」勾选后点「生成标签」。' : '还没有打印过的标签。') }}</p>
+      <p>{{ queue.length ? '没有符合条件的标签。' : '队列是空的。去「我的资产」勾选后点「生成标签」。' }}</p>
     </div>
 
     <p v-if="message" class="label-message" :class="{ 'is-error': messageError }">{{ message }}</p>

@@ -116,12 +116,7 @@ async function issueTags() {
       method: 'POST',
       body: JSON.stringify({ asset_ids: selected.value, title: '本体' }),
     })
-    const skipped = selected.value.length - created.length
-    if (created.length) {
-      flash(`已生成 ${created.length} 张标签（${skipped} 台已有袋跳过），去「标签队列」打印`)
-    } else {
-      flash(`${skipped} 台都已有袋；要加第二个袋请点开资产详情`)
-    }
+    flash(`已放入待打印队列：${created.length} 张，去「标签队列」打印`)
   } catch (exc) {
     flash(exc.message, true)
   } finally {

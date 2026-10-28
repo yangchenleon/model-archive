@@ -30,9 +30,9 @@ def list_tags(
 
 
 @router.post("/assets/bulk/tags", response_model=list[TagRead], status_code=status.HTTP_201_CREATED)
-def bulk_create_tags(payload: BulkTagCreate, session: Session = Depends(get_session)) -> list[AssetTag]:
-    """One sticker for every asset that has none yet; the rest are skipped."""
-    return service.issue_first(session, payload)
+def bulk_queue_tags(payload: BulkTagCreate, session: Session = Depends(get_session)) -> list[AssetTag]:
+    """Back to the print queue: issue a sticker if missing, otherwise un-print it."""
+    return service.requeue(session, payload)
 
 
 @router.post("/assets/{asset_id}/tags", response_model=TagRead, status_code=status.HTTP_201_CREATED)
