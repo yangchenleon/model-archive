@@ -11,7 +11,7 @@
 
 ### `products`
 
-产品目录主数据。一个产品由厂商、产品线、模型名称和版本/配色描述；是否因配色或版本拆成不同产品，由目录规则决定。
+产品目录主数据。一个产品由厂商、系列、模型名称和版本/配色描述；是否因配色或版本拆成不同产品，由目录规则决定。
 
 `products` 只存**固有身份 + 当前价格**；不保存状态、公布/发售时间，也没有事件表。审核入库流程见 [review-workflow.md](review-workflow.md)。
 
@@ -20,18 +20,29 @@
 | 字段 | 含义 |
 | --- | --- |
 | `id` | 内部 UUID 主键，不对用户暴露。 |
-| `manufacturer`、`product_code`、`product_line` | 自由文本，可空；`product_code` 是厂商给产品的市场编号。 |
+| `manufacturer_id` | → `manufacturers`，必填；产品身份的一半。 |
+| `product_line_id` | → `product_lines`，可空；空 = 未知。系列不参与身份。 |
+| `product_code` | 自由文本，可空；厂商给产品的市场编号。 |
 | `kit_name` | 产品识别信息，模型名称必填；版本/配色以括号并入名称。 |
 | `price` | 当前价格，自由文本（`78`、`68元`、`22000日元`、`299-398`），不拆数值/币种。 |
 | `detail` | 自由补充说明，可空。 |
 | `source` | 资料来源；新 CSV 由人工填写，旧测试数据使用“初始化测试”。 |
 | `created_at` | 入库时间，只记录插入；没有 `updated_at`。 |
 
+### `manufacturers` 与 `product_lines`
+
+- `manufacturers`：规范厂名、分类（`gundam / guomo / ko`，空 = 未分类）、等级（1–3，数字越大越靠后）、同级隐藏排序、描述。
+- `product_lines`：**按厂家归属的平铺系列**，`(manufacturer_id, name)` 唯一；HG、HGUC、HG GTO 是不同系列，不做层级。删除系列 → 产品 `product_line_id` 置 NULL（未知）。
+- 没有别名表：名字错了就改，不做映射。
+- 后台入口：`/#taxonomy`（厂家管理）。设计见 [manufacturer-and-line-taxonomy.md](manufacturer-and-line-taxonomy.md)。
+
 ### `review_items`
 
 审核入库的审计队列：每条抽取 mention 的来源（视频、秒数、evidence）、抽取字段和处理结果
 （`pending / mapped / created / skipped`）。`mapped` 只记录“这条 mention 属于哪个产品”，
 不修改产品；产品字段修正走后端管理页。
+
+`brand` / `line` 保留原始抽取值；另加可空的 `manufacturer_id` / `product_line_id` 记录匹配结果。审核新建产品时使用这两个 ID，**不自动创建厂家**。
 
 ### `assets`、`tags` 与 `asset_state_changes`
 
@@ -60,8 +71,8 @@
 ```text
 backend/app/
   main.py      组装：注册路由、把领域错误映射成 HTTP 状态码
-  api/         URL 与入参：products / review / assets / tags / collections / media
-  services/    规则：重复判定、状态迁移与审计、标签作废、收藏集范围与统计
+  api/         URL 与入参：products / review / assets / tags / collections / manufacturers / media
+  services/    规则：重复判定、状态迁移与审计、标签作废、收藏集范围与统计、厂家/系列
   models.py    表
   schemas.py   出入参
 ```
@@ -73,16 +84,16 @@ backend/app/
 ## 写入原则
 
 1. 产品只通过 API 写入：`POST /api/v1/products`（单条）或 `/api/v1/products/bulk`（批量，全成全败）；前端后台管理也是调用这两个接口。
-2. 每条必须提供模型名称与资料来源；其他识别字段可空。
-3. 同名同厂商视为同一产品，返回 409；合并/改名走后台管理。
-4. 项目不解析 CSV/Excel；外部工具负责把格式适配成上述接口的 JSON 字段。
-5. UUID、外键、内部兼容字段不出现在对外的录入字段里。
+2. 每条必须提供模型名称、厂商 `manufacturer_id` 与资料来源；系列 `product_line_id` 可空（未知）。
+3. 同名同厂商视为同一产品，返回 409；查重键是 `(manufacturer_id, kit_name)`。改名/合并走后台管理。
+4. 项目不解析 CSV/Excel；外部工具负责把格式适配成上述接口的 JSON 字段，并先查厂家/系列 ID。
+5. UUID、外键、内部兼容字段不出现在对外的展示字段里；响应仍带厂家/系列名称。
 
 ## 下一阶段
 
 资产、标签、收藏集已落地（`/#inventory`、`/#labels`、`/#collections`），产品目录已改为厂家优先
-（`/#directory`）。下一步做厂家表、分类/等级/隐藏排序和按厂家归属的系列表，方案见
-[manufacturer-and-line-taxonomy.md](manufacturer-and-line-taxonomy.md)；确认分类/等级/系列归属后再实施。
+（`/#directory`），厂家/系列分类与后台管理也已落地（`/#taxonomy`，迁移 `0022`）。下一步是后台数据治理：
+把 79 家未分类厂家归到 高达/国模/KO，清理 162 个系列，并另开一轮处理同厂商同名产品。
 
 位置尚未固定，所以**不做**容器/摆放模型；等“某个箱子固定放某几台、并且要按位置找东西”时再加，
 用已有的 `assets.id` 关联，标签不用重贴。

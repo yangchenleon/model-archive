@@ -14,7 +14,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, contains_eager
 
-from app.models import Asset, Collection, CollectionItem, Product
+from app.models import Asset, Collection, CollectionItem, Manufacturer, Product, ProductLine
 from app.schemas import (
     CollectionBulkAdd,
     CollectionBulkRemove,
@@ -364,10 +364,13 @@ def list_items(
     items = list(session.scalars(
         select(CollectionItem)
         .join(CollectionItem.product)
+        .join(Manufacturer, Product.manufacturer_id == Manufacturer.id)
+        .outerjoin(ProductLine, Product.product_line_id == ProductLine.id)
         .options(contains_eager(CollectionItem.product))
         .where(CollectionItem.collection_id == collection_id)
         .order_by(
-            Product.product_line.nulls_last(),
+            Manufacturer.name.nulls_last(),
+            ProductLine.name.nulls_last(),
             Product.product_code.nulls_last(),
             Product.kit_name,
         )

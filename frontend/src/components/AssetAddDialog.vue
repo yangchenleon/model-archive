@@ -93,7 +93,7 @@ async function submit() {
         </header>
 
         <div class="pick-toolbar">
-          <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索产品名 / 厂商 / 产品线" /></label>
+          <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索产品名 / 厂商 / 系列" /></label>
           <label class="select-field state-field">
             <select v-model="state">
               <option v-for="option in STATE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>

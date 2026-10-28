@@ -20,7 +20,7 @@ def make_asset(client, product, **fields):
 def test_product_duplicate_is_rejected(client, product):
     again = client.post(
         "/api/v1/products",
-        json={"kit_name": product["kit_name"], "manufacturer": product["manufacturer"], "source": "pytest"},
+        json={"kit_name": product["kit_name"], "manufacturer_id": product["manufacturer_id"], "source": "pytest"},
     )
     assert again.status_code == 409
 

@@ -9,7 +9,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models import Product
+from app.models import Manufacturer, Product, ProductLine
 from app.schemas import ProductCollectionRead, ProductCreate, ProductRead, ProductUpdate
 from app.services import collections as collection_service
 from app.services import products as service
@@ -34,18 +34,24 @@ def list_products(
     limit: int = Query(default=100, le=2000),
     session: Session = Depends(get_session),
 ) -> list[Product]:
-    statement = select(Product).order_by(
-        Product.manufacturer.nulls_last(),
-        Product.product_line.nulls_last(),
-        Product.product_code.nulls_last(),
-        Product.kit_name,
-    ).limit(limit)
+    statement = (
+        select(Product)
+        .join(Manufacturer, Product.manufacturer_id == Manufacturer.id)
+        .outerjoin(ProductLine, Product.product_line_id == ProductLine.id)
+        .order_by(
+            Manufacturer.name.nulls_last(),
+            ProductLine.name.nulls_last(),
+            Product.product_code.nulls_last(),
+            Product.kit_name,
+        )
+        .limit(limit)
+    )
     if search:
         term = f"%{search.strip()}%"
         statement = statement.where(or_(
             Product.kit_name.ilike(term),
-            Product.manufacturer.ilike(term),
-            Product.product_line.ilike(term),
+            Manufacturer.name.ilike(term),
+            ProductLine.name.ilike(term),
             Product.product_code.ilike(term),
         ))
     return list(session.scalars(statement))

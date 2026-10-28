@@ -123,7 +123,7 @@ async function submit() {
         </header>
 
         <div class="pick-toolbar">
-          <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索产品名 / 编号 / 产品线" /></label>
+          <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索产品名 / 编号 / 系列" /></label>
           <label class="select-field">
             <select v-model="makerFilter" @change="lineFilter = ''">
               <option value="">所有厂商</option>
@@ -132,7 +132,7 @@ async function submit() {
           </label>
           <label class="select-field">
             <select v-model="lineFilter">
-              <option value="">所有产品线</option>
+              <option value="">所有系列</option>
               <option v-for="line in lines" :key="line" :value="line">{{ line }}</option>
             </select>
           </label>

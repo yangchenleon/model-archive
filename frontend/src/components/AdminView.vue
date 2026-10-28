@@ -3,18 +3,21 @@ import { computed, reactive, ref } from 'vue'
 import {
   ArrowDown, ArrowUp, ChevronDown, Download, LoaderCircle, Pencil, Plus, RefreshCw, Save, Search, Trash2, X,
 } from 'lucide-vue-next'
+import ManufacturerPicker from './ManufacturerPicker.vue'
 
 const SORT_FIELDS = [
   { key: 'manufacturer', label: '厂商' },
   { key: 'kit_name', label: '产品' },
   { key: 'product_code', label: '编号' },
-  { key: 'product_line', label: '产品线' },
+  { key: 'product_line', label: '系列' },
   { key: 'price', label: '价格' },
   { key: 'created_at', label: '入库时间' },
 ]
 const STATE_LABELS = { pending: '待审', mapped: '已映射', created: '已新建', skipped: '已跳过' }
 
 const products = ref([])
+const manufacturers = ref([])
+const lines = ref([])
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
@@ -30,7 +33,7 @@ const editing = ref(null)
 const audit = ref([])
 const auditLoading = ref(false)
 const form = reactive({
-  kit_name: '', manufacturer: '', product_code: '', product_line: '', price: '', source: '', detail: '',
+  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', price: '', source: '', detail: '',
 })
 
 const filtered = computed(() => {
@@ -77,6 +80,31 @@ async function loadProducts() {
   }
 }
 
+async function loadManufacturers() {
+  try {
+    manufacturers.value = await api('/api/v1/manufacturers?limit=500')
+  } catch {
+    manufacturers.value = []
+  }
+}
+
+async function loadLines(manufacturerId) {
+  if (!manufacturerId) {
+    lines.value = []
+    return
+  }
+  try {
+    lines.value = await api(`/api/v1/product-lines?manufacturer_id=${manufacturerId}&limit=500`)
+  } catch {
+    lines.value = []
+  }
+}
+
+function onManufacturerChange() {
+  form.product_line_id = ''
+  loadLines(form.manufacturer_id)
+}
+
 function replaceProduct(updated) {
   const index = products.value.findIndex((item) => item.id === updated.id)
   if (index >= 0) products.value[index] = updated
@@ -93,9 +121,10 @@ function sortBy(key) {
 
 function resetForm() {
   Object.assign(form, {
-    kit_name: '', manufacturer: '', product_code: '', product_line: '',
+    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '',
     price: '', source: '手动录入', detail: '',
   })
+  lines.value = []
 }
 
 function openCreate() {
@@ -110,13 +139,14 @@ async function openEdit(product) {
   editing.value = { ...product }
   Object.assign(form, {
     kit_name: product.kit_name || '',
-    manufacturer: product.manufacturer || '',
+    manufacturer_id: product.manufacturer_id || '',
     product_code: product.product_code || '',
-    product_line: product.product_line || '',
+    product_line_id: product.product_line_id || '',
     price: product.price || '',
     source: product.source || '',
     detail: product.detail || '',
   })
+  await loadLines(form.manufacturer_id)
   audit.value = []
   auditLoading.value = true
   try {
@@ -141,9 +171,9 @@ function nullIfEmpty(value) {
 function payload() {
   return {
     kit_name: form.kit_name.trim(),
-    manufacturer: nullIfEmpty(form.manufacturer),
+    manufacturer_id: form.manufacturer_id || null,
     product_code: nullIfEmpty(form.product_code),
-    product_line: nullIfEmpty(form.product_line),
+    product_line_id: form.product_line_id || null,
     price: nullIfEmpty(form.price),
     source: form.source.trim(),
     detail: nullIfEmpty(form.detail),
@@ -154,6 +184,10 @@ async function saveProduct() {
   if (!editorMode.value || busy.value) return
   if (!form.kit_name.trim()) {
     flash('产品名称不能为空', true)
+    return
+  }
+  if (!form.manufacturer_id) {
+    flash('请选择厂商；没有就去「厂家管理」新建', true)
     return
   }
   if (!form.source.trim()) {
@@ -199,7 +233,7 @@ async function removeProduct() {
 }
 
 function exportCsv() {
-  const headers = ['厂商', '产品编号', '产品线', '模型名称', '价格', '资料来源', '详情', '入库时间', 'id']
+  const headers = ['厂商', '产品编号', '系列', '模型名称', '价格', '资料来源', '详情', '入库时间', 'id']
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const lines = [headers.join(',')]
   for (const product of filtered.value) {
@@ -221,6 +255,7 @@ function reviewLink(item) {
   return item.video_id ? `https://www.bilibili.com/video/${item.video_id}?t=${item.start_seconds || 0}` : ''
 }
 
+loadManufacturers()
 loadProducts()
 </script>
 
@@ -240,7 +275,7 @@ loadProducts()
     </header>
 
     <section class="toolbar admin-toolbar">
-      <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索名称 / 厂商 / 编号 / 产品线" /></label>
+      <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索名称 / 厂商 / 编号 / 系列" /></label>
       <span class="result-count">{{ filtered.length }} 项</span>
     </section>
 
@@ -288,10 +323,21 @@ loadProducts()
           </header>
 
           <div class="admin-form">
-            <label><span>厂商</span><input v-model="form.manufacturer" placeholder="万代 / 大班 …" /></label>
+            <label><span>厂商 <b>*</b></span>
+              <ManufacturerPicker
+                v-model="form.manufacturer_id"
+                :manufacturers="manufacturers"
+                @change="onManufacturerChange"
+              />
+            </label>
             <label><span>产品编号</span><input v-model="form.product_code" placeholder="RG32 / MDH-12E" /></label>
             <label class="full"><span>产品名称 <b>*</b></span><input v-model="form.kit_name" /></label>
-            <label><span>产品线</span><input v-model="form.product_line" placeholder="MG / RG …" /></label>
+            <label><span>系列</span>
+              <select v-model="form.product_line_id">
+                <option value="">未知</option>
+                <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
+              </select>
+            </label>
             <label><span>价格</span><input v-model="form.price" placeholder="自由文本：78 / 68元 / 22000日元" /></label>
             <label class="full"><span>资料来源 <b>*</b></span><input v-model="form.source" /></label>
             <label class="full"><span>详情</span><textarea v-model="form.detail" rows="3"></textarea></label>
@@ -356,8 +402,8 @@ loadProducts()
 .admin-form label { display: grid; gap: 5px; color: #5d6d67; font-size: 12px; }
 .admin-form label.full { grid-column: 1 / -1; }
 .admin-form label b { color: #bb563b; }
-.admin-form input, .admin-form textarea { width: 100%; padding: 8px 10px; color: #22302b; background: #fbfcfa; border: 1px solid #cfd9d4; border-radius: 5px; outline: none; }
-.admin-form input:focus, .admin-form textarea:focus { background: #fff; border-color: #59877b; }
+.admin-form input, .admin-form select, .admin-form textarea { width: 100%; padding: 8px 10px; color: #22302b; background: #fbfcfa; border: 1px solid #cfd9d4; border-radius: 5px; outline: none; }
+.admin-form input:focus, .admin-form select:focus, .admin-form textarea:focus { background: #fff; border-color: #59877b; }
 
 .audit-section { padding-top: 14px; border-top: 1px solid #e7ece8; }
 .audit-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }

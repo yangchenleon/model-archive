@@ -12,8 +12,10 @@ import LabelsView from './components/LabelsView.vue'
 import PrintView from './components/PrintView.vue'
 import CollectionsView from './components/CollectionsView.vue'
 import CollectionDetail from './components/CollectionDetail.vue'
+import TaxonomyAdmin from './components/TaxonomyAdmin.vue'
+import { categoryLabel, categoryOrder, fetchManufacturers } from './taxonomy'
 
-const SECTIONS = ['directory', 'review', 'admin', 'inventory', 'collections', 'labels', 'print', 'wishlist', 'activity']
+const SECTIONS = ['directory', 'review', 'admin', 'taxonomy', 'inventory', 'collections', 'labels', 'print', 'wishlist', 'activity']
 const activeSection = ref('directory')
 const collectionId = ref('')
 const directoryMaker = ref('')
@@ -60,6 +62,7 @@ function backToCollections() {
 applyRoute()
 window.addEventListener('hashchange', applyRoute)
 const products = ref([])
+const manufacturers = ref([])
 const loading = ref(true)
 const loadError = ref('')
 const search = ref('')
@@ -72,7 +75,8 @@ const assets = ref([])
 const toast = ref('')
 const toastError = ref(false)
 const makerSearch = ref('')
-const makerSort = ref('count')
+const makerSort = ref('taxonomy')
+const categoryFilter = ref('')
 
 function makerName(product) {
   return product.manufacturer || '未标注厂商'
@@ -87,17 +91,28 @@ async function loadReviewPending() {
   }
 }
 
+async function loadManufacturers() {
+  try {
+    manufacturers.value = await fetchManufacturers()
+  } catch {
+    manufacturers.value = []
+  }
+}
+
+const manufacturerById = computed(() => new Map(manufacturers.value.map((row) => [row.id, row])))
+const manufacturerByName = computed(() => new Map(manufacturers.value.map((row) => [row.name, row])))
+
 const makers = computed(() => [...new Set(products.value.map(makerName))].sort((a, b) => a.localeCompare(b, 'zh-CN')))
 
-// 厂商选定后，产品线栏仅可选厂商所存在的产品线，而非全局
+// 厂商选定后，系列栏仅可选厂商所存在的系列，而非全局
 const productLines = computed(() => {
   const sourceList = makerFilter.value
     ? products.value.filter((item) => makerName(item) === makerFilter.value)
     : products.value
-  return [...new Set(sourceList.map((item) => item.product_line).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+  return [...new Set(sourceList.map((item) => item.product_line || '未知'))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
 })
 
-// 如果先选产品线，再选厂商的话，则产品恢复全局筛选（清空已选产品线）
+// 如果先选系列，再选厂商的话，则产品恢复全局筛选（清空已选系列）
 watch(makerFilter, () => {
   lineFilter.value = ''
 })
@@ -105,15 +120,29 @@ watch(makerFilter, () => {
 const selectedMaker = computed(() => (directoryMaker.value && directoryMaker.value !== 'all' ? directoryMaker.value : ''))
 const browseAll = computed(() => directoryMaker.value === 'all')
 const isMakerLanding = computed(() => !directoryMaker.value)
+const selectedMakerId = computed(() => (selectedMaker.value ? manufacturerByName.value.get(selectedMaker.value)?.id || '' : ''))
 
 const makerGroups = computed(() => {
   const groups = new Map()
   for (const product of products.value) {
-    const name = makerName(product)
-    if (!groups.has(name)) groups.set(name, { name, count: 0, lines: new Map(), samples: [] })
-    const group = groups.get(name)
+    const key = product.manufacturer_id || makerName(product)
+    if (!groups.has(key)) {
+      const meta = manufacturerById.value.get(product.manufacturer_id)
+      groups.set(key, {
+        id: key,
+        name: meta?.name || makerName(product),
+        category: meta?.category || null,
+        tier: meta?.tier || 3,
+        sort_order: meta?.sort_order || 0,
+        count: 0,
+        lines: new Map(),
+        samples: [],
+      })
+    }
+    const group = groups.get(key)
     group.count += 1
-    if (product.product_line) group.lines.set(product.product_line, (group.lines.get(product.product_line) || 0) + 1)
+    const lineName = product.product_line || '未知'
+    group.lines.set(lineName, (group.lines.get(lineName) || 0) + 1)
     if (group.samples.length < 3) group.samples.push(product.kit_name)
   }
   return [...groups.values()].map((group) => {
@@ -121,11 +150,9 @@ const makerGroups = computed(() => {
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-CN'))
       .map(([name]) => name)
     return {
-      name: group.name,
-      count: group.count,
+      ...group,
       lineCount: group.lines.size,
       lines: lines.slice(0, 3),
-      samples: group.samples,
     }
   })
 })
@@ -133,11 +160,20 @@ const makerGroups = computed(() => {
 const filteredMakers = computed(() => {
   const term = makerSearch.value.trim().toLowerCase()
   return makerGroups.value
-    .filter((maker) => !term || maker.name.toLowerCase().includes(term))
+    .filter((maker) => {
+      if (categoryFilter.value === 'unclassified' && maker.category !== null) return false
+      if (categoryFilter.value && categoryFilter.value !== 'unclassified' && maker.category !== categoryFilter.value) return false
+      return !term || maker.name.toLowerCase().includes(term)
+    })
     .slice()
     .sort((a, b) => {
       if (makerSort.value === 'name') return a.name.localeCompare(b.name, 'zh-CN')
-      return b.count - a.count || a.name.localeCompare(b.name, 'zh-CN')
+      if (makerSort.value === 'count') return b.count - a.count || a.name.localeCompare(b.name, 'zh-CN')
+      return categoryOrder(a.category) - categoryOrder(b.category)
+        || a.tier - b.tier
+        || a.sort_order - b.sort_order
+        || b.count - a.count
+        || a.name.localeCompare(b.name, 'zh-CN')
     })
 })
 
@@ -150,8 +186,9 @@ const makerLineGroups = computed(() => {
   if (!selectedMaker.value) return []
   const counts = new Map()
   for (const product of products.value) {
-    if (makerName(product) !== selectedMaker.value || !product.product_line) continue
-    counts.set(product.product_line, (counts.get(product.product_line) || 0) + 1)
+    if (makerName(product) !== selectedMaker.value) continue
+    const lineName = product.product_line || '未知'
+    counts.set(lineName, (counts.get(lineName) || 0) + 1)
   }
   return [...counts.entries()]
     .map(([name, count]) => ({ name, count }))
@@ -185,6 +222,10 @@ watch(directoryMaker, (maker) => {
 }, { immediate: true })
 
 watch(activeSection, (section) => {
+  if (section === 'directory') {
+    loadManufacturers()
+    loadProducts()
+  }
   if (section === 'directory' && !directoryMaker.value) {
     makerFilter.value = ''
     lineFilter.value = ''
@@ -196,8 +237,9 @@ const filteredProducts = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase()
   return products.value
     .filter((item) => {
-      const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, item.product_line].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
-      return matchText && (!makerFilter.value || makerName(item) === makerFilter.value) && (!lineFilter.value || item.product_line === lineFilter.value)
+      const lineName = item.product_line || '未知'
+      const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, lineName].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
+      return matchText && (!makerFilter.value || makerName(item) === makerFilter.value) && (!lineFilter.value || lineName === lineFilter.value)
     })
     .slice()
     .sort((a, b) => {
@@ -211,7 +253,7 @@ const filteredProducts = computed(() => {
         if (makerDiff !== 0) return makerDiff
       }
 
-      // 2. 按照产品线排序
+      // 2. 按照系列排序
       const lineA = a.product_line || ''
       const lineB = b.product_line || ''
       if (lineA !== lineB) {
@@ -303,6 +345,7 @@ function onCreated(product) {
 
 onMounted(() => {
   loadProducts()
+  loadManufacturers()
   loadAssets()
   loadReviewPending()
 })
@@ -320,7 +363,7 @@ onMounted(() => {
             <div>
               <p class="eyebrow">产品资料库</p>
               <h1>厂家目录</h1>
-              <p class="page-subtitle">先选厂牌，再看产品。当前按厂名归并，产品线只做厂牌内的次级筛选。</p>
+              <p class="page-subtitle">先选厂牌，再看产品。当前按厂名归并，系列只做厂牌内的次级筛选。</p>
             </div>
             <div class="header-actions">
               <button class="secondary-button" type="button" @click="browseAllProducts">全部产品（{{ products.length }}）</button>
@@ -331,13 +374,22 @@ onMounted(() => {
           <section class="overview-row" aria-label="目录概要">
             <div class="metric"><span>厂牌</span><strong>{{ makerGroups.length }}</strong><small>按厂名归并</small></div>
             <div class="metric"><span>产品</span><strong>{{ products.length }}</strong><small>实时读取数据库</small></div>
-            <div class="metric"><span>产品线</span><strong>{{ productLines.length }}</strong><small>仅作厂牌内筛选</small></div>
+            <div class="metric"><span>系列</span><strong>{{ productLines.length }}</strong><small>仅作厂牌内筛选</small></div>
             <div class="metric mock-metric"><span>待补详情</span><strong>{{ products.filter((item) => !item.detail).length }}</strong><small>可作为整理队列</small></div>
           </section>
 
           <section class="toolbar" aria-label="厂牌筛选">
             <label class="search-field"><Search :size="18" /><input v-model="makerSearch" type="search" placeholder="搜索厂牌" /></label>
-            <label class="select-field"><Filter :size="16" /><select v-model="makerSort"><option value="count">按产品数</option><option value="name">按厂名</option></select></label>
+            <label class="select-field">
+              <select v-model="categoryFilter">
+                <option value="">全部分类</option>
+                <option value="gundam">高达</option>
+                <option value="guomo">国模</option>
+                <option value="ko">KO</option>
+                <option value="unclassified">未分类</option>
+              </select>
+            </label>
+            <label class="select-field"><Filter :size="16" /><select v-model="makerSort"><option value="taxonomy">按分类 / 等级</option><option value="count">按产品数</option><option value="name">按厂名</option></select></label>
             <span class="result-count">{{ filteredMakers.length }} 家</span>
           </section>
 
@@ -347,8 +399,11 @@ onMounted(() => {
             <button v-for="maker in filteredMakers" :key="maker.name" class="maker-card" type="button" @click="enterMaker(maker.name)">
               <span class="maker-avatar" :class="makerTint(maker.name)">{{ maker.name.slice(0, 1) }}</span>
               <span class="maker-body">
-                <span class="maker-name">{{ maker.name }}</span>
-                <span class="maker-meta">{{ maker.count }} 款 · {{ maker.lineCount }} 个产品线</span>
+                <span class="maker-head">
+                  <span class="maker-name">{{ maker.name }}</span>
+                  <span class="maker-category" :class="maker.category || 'unclassified'">{{ categoryLabel(maker.category) }}</span>
+                </span>
+                <span class="maker-meta">{{ maker.count }} 款 · {{ maker.lineCount }} 个系列</span>
                 <span v-if="maker.lines.length" class="maker-lines">
                   <span v-for="line in maker.lines" :key="line">{{ line }}</span>
                   <span v-if="maker.lineCount > maker.lines.length" class="more">+{{ maker.lineCount - maker.lines.length }}</span>
@@ -367,7 +422,7 @@ onMounted(() => {
               <p class="eyebrow">产品目录</p>
               <h1>{{ selectedMaker || '全部产品' }}</h1>
               <p class="page-subtitle">
-                <template v-if="selectedMaker">{{ makerProductCount }} 款 · {{ makerLineGroups.length }} 个产品线</template>
+                <template v-if="selectedMaker">{{ makerProductCount }} 款 · {{ makerLineGroups.length }} 个系列</template>
                 <template v-else>全部 {{ products.length }} 款产品</template>
               </p>
             </div>
@@ -377,7 +432,7 @@ onMounted(() => {
             </div>
           </header>
 
-          <section v-if="selectedMaker && makerLineGroups.length" class="maker-chips" aria-label="厂牌内产品线">
+          <section v-if="selectedMaker && makerLineGroups.length" class="maker-chips" aria-label="厂牌内系列">
             <button type="button" :class="{ active: !lineFilter }" @click="lineFilter = ''">全部 {{ makerProductCount }}</button>
             <button
               v-for="line in makerLineGroups"
@@ -389,10 +444,10 @@ onMounted(() => {
           </section>
 
           <section class="toolbar" aria-label="产品筛选">
-            <label class="search-field"><Search :size="18" /><input v-model="search" type="search" :placeholder="selectedMaker ? '搜索当前厂牌的产品' : '搜索产品名、厂商或产品线'" /></label>
+            <label class="search-field"><Search :size="18" /><input v-model="search" type="search" :placeholder="selectedMaker ? '搜索当前厂牌的产品' : '搜索产品名、厂商或系列'" /></label>
             <template v-if="!selectedMaker">
               <label class="select-field"><Building2 :size="16" /><select v-model="makerFilter"><option value="">所有厂商</option><option v-for="maker in makers" :key="maker" :value="maker">{{ maker }}</option></select></label>
-              <label class="select-field"><Filter :size="16" /><select v-model="lineFilter"><option value="">所有产品线</option><option v-for="line in productLines" :key="line" :value="line">{{ line }}</option></select></label>
+              <label class="select-field"><Filter :size="16" /><select v-model="lineFilter"><option value="">所有系列</option><option v-for="line in productLines" :key="line" :value="line">{{ line }}</option></select></label>
             </template>
             <button v-if="search || lineFilter || (!selectedMaker && makerFilter)" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
             <span class="result-count">{{ filteredProducts.length }} 项</span>
@@ -412,6 +467,10 @@ onMounted(() => {
 
       <section v-else-if="activeSection === 'admin'" class="admin-section">
         <AdminView />
+      </section>
+
+      <section v-else-if="activeSection === 'taxonomy'" class="taxonomy-section">
+        <TaxonomyAdmin />
       </section>
 
       <section v-else-if="activeSection === 'inventory'" class="asset-section">
@@ -438,7 +497,7 @@ onMounted(() => {
 
   <ProductDrawer :product="selectedProduct" @close="selectedProduct = null" @open-collection="openCollection" />
   <p v-if="toast" class="app-toast" :class="{ 'is-error': toastError }">{{ toast }}</p>
-  <AddProductDialog :open="addDialogOpen" :default-manufacturer="selectedMaker" @close="addDialogOpen = false" @created="onCreated" />
+  <AddProductDialog :open="addDialogOpen" :default-manufacturer-id="selectedMakerId" @close="addDialogOpen = false" @created="onCreated" />
 </template>
 
 <style>
@@ -458,7 +517,13 @@ onMounted(() => {
 .maker-avatar.tint-4 { color: #a4402c; background: #fdeee9; }
 .maker-avatar.tint-5 { color: #4f5f5a; background: #eef1ef; }
 .maker-body { display: grid; flex: 1; gap: 2px; min-width: 0; }
-.maker-name { overflow: hidden; color: #1d2b27; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.maker-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.maker-name { flex: 1; overflow: hidden; color: #1d2b27; font-size: 15px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.maker-category { flex: 0 0 auto; padding: 1px 6px; font-size: 10px; line-height: 1.5; border-radius: 999px; border: 1px solid #dfe6e1; }
+.maker-category.gundam { color: #3f5f8a; background: #eef3fb; border-color: #d3dff0; }
+.maker-category.guomo { color: #1f5b4c; background: #e8f3ee; border-color: #c9e2d7; }
+.maker-category.ko { color: #8a5f18; background: #fdf6e7; border-color: #f0dfb8; }
+.maker-category.unclassified { color: #8a8f8c; background: #f3f3f1; border-color: #e2e2df; }
 .maker-meta { color: #87938f; font-size: 11px; }
 .maker-lines { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
 .maker-lines span { padding: 1px 6px; color: #557069; font-size: 10px; background: #f2f7f4; border: 1px solid #e0eae4; border-radius: 999px; }

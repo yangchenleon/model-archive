@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Check, ExternalLink, LoaderCircle, RotateCcw, Search, SkipForward } from 'lucide-vue-next'
 import SkippedItems from './SkippedItems.vue'
+import ManufacturerPicker from './ManufacturerPicker.vue'
+import { fetchLines, fetchManufacturers } from '../taxonomy'
 
 const emit = defineEmits(['pending'])
 
@@ -23,7 +25,9 @@ const sort = ref('brand')
 const skipReason = ref('later')
 const showSkipped = ref(false)
 
-const form = reactive({ manufacturer: '', kit_name: '', product_code: '', product_line: '', price_text: '' })
+const manufacturers = ref([])
+const lines = ref([])
+const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', price_text: '' })
 const search = ref('')
 const candidates = ref([])
 const selected = ref(null)
@@ -64,17 +68,47 @@ function flash(text, isError = false) {
   flash.timer = window.setTimeout(() => { message.value = '' }, 3200)
 }
 
-function prepare(next) {
+async function loadManufacturers() {
+  try {
+    manufacturers.value = await fetchManufacturers()
+  } catch {
+    manufacturers.value = []
+  }
+}
+
+async function loadLines(manufacturerId) {
+  if (!manufacturerId) {
+    lines.value = []
+    return
+  }
+  try {
+    lines.value = await fetchLines(manufacturerId)
+  } catch {
+    lines.value = []
+  }
+}
+
+async function prepare(next) {
   if (!next) return
-  form.manufacturer = next.brand || ''
+  const brand = (next.brand || '').trim()
+  const maker = manufacturers.value.find((row) => row.name === brand)
+  form.manufacturer_id = maker?.id || ''
   form.kit_name = next.variant ? `${next.product}（${next.variant}）` : (next.product || '')
   form.product_code = ''
-  form.product_line = next.line || ''
+  form.product_line_id = ''
   form.price_text = next.price_raw || ''
   selected.value = null
   search.value = next.product || ''
   candidates.value = []
   fetchCandidates()
+  await loadLines(form.manufacturer_id)
+  const line = lines.value.find((row) => row.name === (next.line || '').trim())
+  form.product_line_id = line?.id || ''
+}
+
+function onManufacturerChange() {
+  form.product_line_id = ''
+  loadLines(form.manufacturer_id)
 }
 
 async function loadStats() {
@@ -157,15 +191,19 @@ async function createProduct() {
     flash('产品名不能为空', true)
     return
   }
+  if (!form.manufacturer_id) {
+    flash('请选择厂商；没有就去「厂家管理」新建，刷新后再匹配', true)
+    return
+  }
   busy.value = true
   try {
     const product = await api(`/api/v1/review/${item.value.id}/create`, {
       method: 'POST',
       body: JSON.stringify({
-        manufacturer: form.manufacturer.trim() || null,
+        manufacturer_id: form.manufacturer_id,
+        product_line_id: form.product_line_id || null,
         kit_name: form.kit_name.trim(),
         product_code: form.product_code.trim() || null,
-        product_line: form.product_line.trim() || null,
         detail: item.value.detail,
         price_text: form.price_text.trim() || null,
       }),
@@ -219,6 +257,7 @@ function onKey(event) {
 
 onMounted(async () => {
   window.addEventListener('keydown', onKey)
+  await loadManufacturers()
   await Promise.all([loadStats(), loadQueue()])
 })
 onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
@@ -288,16 +327,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div class="review-meta">
           <span>抽取阶段 <b>{{ item.status_raw || 'unknown' }}</b></span>
           <span>抽取价格 <b>{{ item.price_raw || '—' }}</b></span>
-          <span>抽取产品线 <b>{{ item.line || '—' }}</b></span>
+          <span>抽取系列 <b>{{ item.line || '—' }}</b></span>
         </div>
 
         <div class="review-form">
-          <label><span>厂商</span><input v-model="form.manufacturer" placeholder="万代 / 大班 …" /></label>
+          <label><span>厂商</span>
+            <ManufacturerPicker
+              v-model="form.manufacturer_id"
+              :manufacturers="manufacturers"
+              @change="onManufacturerChange"
+            />
+          </label>
           <label><span>产品编号</span><input v-model="form.product_code" placeholder="RG32 / MDH-12E" /></label>
           <label class="wide"><span>产品名（入库用，可改）</span><input v-model="form.kit_name" /></label>
-          <label><span>产品线</span><input v-model="form.product_line" placeholder="MG / RG …" /></label>
+          <label><span>系列</span>
+            <select v-model="form.product_line_id">
+              <option value="">未知</option>
+              <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
+            </select>
+          </label>
           <label><span>价格</span><input v-model="form.price_text" placeholder="78 / 68元 / 22000日元" /></label>
         </div>
+        <p v-if="!form.manufacturer_id" class="manufacturer-warning">没有匹配到厂商：去「厂家管理」新建，刷新页面后再匹配。</p>
 
         <footer class="review-actions">
           <span class="hint">Enter 映射 · N 新建 · S 跳过</span>
@@ -313,7 +364,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
       <aside class="review-side">
         <h3>匹配现有产品</h3>
-        <label class="search-field"><Search :size="16" /><input v-model="search" type="search" placeholder="搜厂商 / 产品 / 产品线" /></label>
+        <label class="search-field"><Search :size="16" /><input v-model="search" type="search" placeholder="搜厂商 / 产品 / 系列" /></label>
         <p class="side-hint" v-if="searching">搜索中…</p>
         <ul class="candidate-list">
           <li
@@ -375,6 +426,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .review-form label.wide { grid-column: 1 / -1; }
 .review-form input, .review-form select { width: 100%; min-height: 36px; padding: 0 10px; color: #22302b; background: #fbfcfa; border: 1px solid #cfd9d4; border-radius: 5px; outline: none; }
 .review-form input:focus, .review-form select:focus { background: #fff; border-color: #59877b; }
+.manufacturer-warning { margin: 8px 0 0; color: #a4402c; font-size: 12px; }
 
 .review-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #e7ece8; }
 .review-actions .hint { color: #98a39f; font-size: 12px; }

@@ -1,5 +1,7 @@
 # 厂家目录与厂家表：现状评估
 
+> 2026-10-28 后续定稿：**不做 `manufacturer_aliases` 表；分类只有 高达/国模/KO；等级 1–3；系列按厂家平铺。** 本文保留合并前的数据评估，其中 alias 表/分类方案**已否决**，不再作为实施方案；最终实现见 [manufacturer-and-line-taxonomy.md](manufacturer-and-line-taxonomy.md)。
+
 > 结论：**现在用 `products.manufacturer` 字符串做厂家目录已经够用（已实现）；但长期要维护产品表，建议下一步做 `manufacturers` 表 + `products.manufacturer_id`。** 先做表、再回头做收藏集，比以后带着字符串到处补要省事。
 >
 > 2026-10-28 已直接在数据库合并两组别名：猛虎 → 猛虎模型（18 款）、瘦虎 → 瘦虎模型（2 款）；厂商字符串从 86 降到 84。B社 → 万代仍待确认。

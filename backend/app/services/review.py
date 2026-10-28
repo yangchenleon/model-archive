@@ -9,9 +9,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Product, ReviewItem
-from app.schemas import ReviewCreateRequest, ReviewList, ReviewMapRequest, ReviewSkipRequest
+from app.schemas import ProductCreate, ReviewCreateRequest, ReviewList, ReviewMapRequest, ReviewSkipRequest
 from app.services import products as products_service
-from app.services.errors import Conflict, Invalid, NotFound
+from app.services.errors import Invalid, NotFound
 
 SKIP_REASONS = {"later", "ad", "duplicate", "invalid"}
 
@@ -75,6 +75,8 @@ def map_to_product(session: Session, item_id: UUID, payload: ReviewMapRequest) -
     if product is None:
         raise NotFound("目标产品不存在")
     item.product_id = product.id
+    item.manufacturer_id = product.manufacturer_id
+    item.product_line_id = product.product_line_id
     item.state = "mapped"
     item.reviewed_at = datetime.now(timezone.utc)
     session.commit()
@@ -88,26 +90,21 @@ def create_product(session: Session, item_id: UUID, payload: ReviewCreateRequest
     if not kit_name:
         raise Invalid("产品名称不能为空")
 
-    manufacturer = payload.manufacturer or item.brand or None
-    if products_service.find_duplicate(session, manufacturer, kit_name) is not None:
-        raise Conflict("已存在同名产品，请用「映射」而不是新建")
-
-    product = Product(
-        manufacturer=manufacturer,
+    product = products_service.create(session, ProductCreate(
+        manufacturer_id=payload.manufacturer_id,
+        product_line_id=payload.product_line_id,
         product_code=(payload.product_code.strip() if payload.product_code and payload.product_code.strip() else None),
-        product_line=payload.product_line or item.line or None,
         kit_name=kit_name,
         detail=payload.detail or item.detail,
         source=f"https://www.bilibili.com/video/{item.video_id}" if item.video_id else "手动录入",
         price=(payload.price_text.strip() if payload.price_text and payload.price_text.strip() else None),
-    )
-    session.add(product)
-    session.flush()
+    ))
     item.product_id = product.id
+    item.manufacturer_id = product.manufacturer_id
+    item.product_line_id = product.product_line_id
     item.state = "created"
     item.reviewed_at = datetime.now(timezone.utc)
     session.commit()
-    session.refresh(product)
     return product
 
 
@@ -133,6 +130,8 @@ def reset(session: Session, item_id: UUID) -> ReviewItem:
     item.state = "pending"
     item.skip_reason = None
     item.product_id = None
+    item.manufacturer_id = None
+    item.product_line_id = None
     item.reviewed_at = None
     session.commit()
     session.refresh(item)

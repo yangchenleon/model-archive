@@ -5,13 +5,39 @@ from __future__ import annotations
 from uuid import uuid4
 
 
+def make_manufacturer(client, name):
+    rows = client.get("/api/v1/manufacturers", params={"q": name}).json()
+    for row in rows:
+        if row["name"] == name:
+            return row
+    response = client.post("/api/v1/manufacturers", json={"name": name})
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def make_line(client, manufacturer_id, name):
+    rows = client.get("/api/v1/product-lines", params={"manufacturer_id": manufacturer_id}).json()
+    for row in rows:
+        if row["name"] == name:
+            return row
+    response = client.post(
+        "/api/v1/product-lines",
+        json={"manufacturer_id": manufacturer_id, "name": name},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def make_product(client, name, manufacturer="测试厂", line="RG", code=None):
+    maker = make_manufacturer(client, manufacturer)
+    target_line = make_line(client, maker["id"], line) if line else None
     payload = {
         "kit_name": name,
-        "manufacturer": manufacturer,
-        "product_line": line,
+        "manufacturer_id": maker["id"],
         "source": "pytest",
     }
+    if target_line is not None:
+        payload["product_line_id"] = target_line["id"]
     if code:
         payload["product_code"] = code
     response = client.post("/api/v1/products", json=payload)

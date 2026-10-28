@@ -33,7 +33,16 @@ def engine():
 @pytest.fixture(scope="session", autouse=True)
 def no_pollution(engine):
     """Canary: the suite must not move the row counts of the dev database."""
-    tables = ("products", "assets", "tags", "asset_state_changes", "collections", "collection_items")
+    tables = (
+        "products",
+        "assets",
+        "tags",
+        "asset_state_changes",
+        "collections",
+        "collection_items",
+        "manufacturers",
+        "product_lines",
+    )
 
     def counts():
         with engine.connect() as connection:
@@ -73,9 +82,18 @@ def client(db):
 
 @pytest.fixture
 def product(client):
+    manufacturer = client.post(
+        "/api/v1/manufacturers",
+        json={"name": "测试厂", "category": "guomo", "tier": 1},
+    )
+    assert manufacturer.status_code == 201, manufacturer.text
     response = client.post(
         "/api/v1/products",
-        json={"kit_name": "测试用机体", "manufacturer": "测试厂", "source": "pytest"},
+        json={
+            "kit_name": "测试用机体",
+            "manufacturer_id": manufacturer.json()["id"],
+            "source": "pytest",
+        },
     )
     assert response.status_code == 201, response.text
     return response.json()

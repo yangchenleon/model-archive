@@ -5,10 +5,70 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ManufacturerCreate(BaseModel):
+    name: str
+    category: str | None = None
+    tier: int = Field(default=3, ge=1, le=3)
+    sort_order: int = 0
+    description: str | None = None
+
+
+class ManufacturerUpdate(BaseModel):
+    name: str | None = None
+    category: str | None = None
+    tier: int | None = Field(default=None, ge=1, le=3)
+    sort_order: int | None = None
+    description: str | None = None
+
+
+class ManufacturerRead(BaseModel):
+    id: UUID
+    name: str
+    category: str | None = None
+    tier: int = 3
+    sort_order: int = 0
+    description: str | None = None
+    product_count: int = 0
+    line_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ManufacturerBrief(BaseModel):
+    id: UUID
+    name: str
+    category: str | None = None
+    tier: int = 3
+    sort_order: int = 0
+
+
+class ManufacturerMergeRequest(BaseModel):
+    target_id: UUID
+
+
+class ProductLineCreate(BaseModel):
+    manufacturer_id: UUID
+    name: str
+    sort_order: int = 0
+
+
+class ProductLineUpdate(BaseModel):
+    name: str | None = None
+    sort_order: int | None = None
+
+
+class ProductLineRead(BaseModel):
+    id: UUID
+    manufacturer_id: UUID
+    name: str
+    sort_order: int = 0
+    product_count: int = 0
+
+
 class ProductCreate(BaseModel):
-    manufacturer: str | None = None
+    manufacturer_id: UUID
+    product_line_id: UUID | None = None
     product_code: str | None = None
-    product_line: str | None = None
     kit_name: str
     detail: str | None = None
     source: str
@@ -16,9 +76,9 @@ class ProductCreate(BaseModel):
 
 
 class ProductUpdate(BaseModel):
-    manufacturer: str | None = None
+    manufacturer_id: UUID | None = None
+    product_line_id: UUID | None = None
     product_code: str | None = None
-    product_line: str | None = None
     kit_name: str | None = None
     detail: str | None = None
     source: str | None = None
@@ -28,6 +88,8 @@ class ProductUpdate(BaseModel):
 class ProductRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
+    manufacturer_id: UUID
+    product_line_id: UUID | None = None
     manufacturer: str | None = None
     product_code: str | None = None
     product_line: str | None = None
@@ -145,6 +207,8 @@ class ReviewItemRead(BaseModel):
     price_raw: str | None = None
     detail: str | None = None
     evidence: str | None = None
+    manufacturer_id: UUID | None = None
+    product_line_id: UUID | None = None
     product_id: UUID | None = None
     state: str
     skip_reason: str | None = None
@@ -166,10 +230,10 @@ class ReviewSkipRequest(BaseModel):
 
 
 class ReviewCreateRequest(BaseModel):
-    manufacturer: str | None = None
+    manufacturer_id: UUID
+    product_line_id: UUID | None = None
     kit_name: str
     product_code: str | None = None
-    product_line: str | None = None
     detail: str | None = None
     price_text: str | None = None
 
@@ -178,6 +242,8 @@ class ProductBrief(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     kit_name: str
+    manufacturer_id: UUID
+    product_line_id: UUID | None = None
     manufacturer: str | None = None
     product_line: str | None = None
 

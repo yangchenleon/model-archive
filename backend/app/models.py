@@ -8,18 +8,80 @@ from app.db import Base
 from app.states import allowed_next_states
 
 
+class Manufacturer(Base):
+    __tablename__ = "manufacturers"
+    __table_args__ = (
+        CheckConstraint(
+            "category IS NULL OR category IN ('gundam', 'guomo', 'ko')",
+            name="ck_manufacturers_category",
+        ),
+        CheckConstraint("tier BETWEEN 1 AND 3", name="ck_manufacturers_tier"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), unique=True)
+    category: Mapped[str | None] = mapped_column(String(16), index=True)
+    tier: Mapped[int] = mapped_column(SmallInteger, default=3, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    products: Mapped[list[Product]] = relationship(
+        back_populates="manufacturer_ref", passive_deletes=True
+    )
+    lines: Mapped[list[ProductLine]] = relationship(
+        back_populates="manufacturer", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class ProductLine(Base):
+    __tablename__ = "product_lines"
+    __table_args__ = (
+        UniqueConstraint("manufacturer_id", "name", name="uq_product_lines_manufacturer_name"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    manufacturer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("manufacturers.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    manufacturer: Mapped[Manufacturer] = relationship(back_populates="lines")
+    products: Mapped[list[Product]] = relationship(
+        back_populates="product_line_ref", passive_deletes=True
+    )
+
+
 class Product(Base):
     __tablename__ = "products"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    manufacturer: Mapped[str | None] = mapped_column(String(120))
+    manufacturer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("manufacturers.id", ondelete="RESTRICT"), index=True
+    )
+    product_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("product_lines.id", ondelete="SET NULL"), index=True
+    )
     product_code: Mapped[str | None] = mapped_column(String(120))
-    product_line: Mapped[str | None] = mapped_column(String(120))
     kit_name: Mapped[str] = mapped_column(String(240))
     detail: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(160))
     price: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    manufacturer_ref: Mapped[Manufacturer] = relationship(
+        back_populates="products", lazy="joined"
+    )
+    product_line_ref: Mapped[ProductLine | None] = relationship(
+        back_populates="products", lazy="joined"
+    )
     assets: Mapped[list[Asset]] = relationship(back_populates="product")
+
+    @property
+    def manufacturer(self) -> str | None:
+        return self.manufacturer_ref.name if self.manufacturer_ref is not None else None
+
+    @property
+    def product_line(self) -> str | None:
+        return self.product_line_ref.name if self.product_line_ref is not None else None
 
 
 class Collection(Base):
@@ -85,6 +147,12 @@ class ReviewItem(Base):
     price_raw: Mapped[str | None] = mapped_column(String(64))
     detail: Mapped[str | None] = mapped_column(Text)
     evidence: Mapped[str | None] = mapped_column(Text)
+    manufacturer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("manufacturers.id", ondelete="SET NULL"), index=True
+    )
+    product_line_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("product_lines.id", ondelete="SET NULL"), index=True
+    )
     product_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"))
     state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     skip_reason: Mapped[str | None] = mapped_column(String(24))
