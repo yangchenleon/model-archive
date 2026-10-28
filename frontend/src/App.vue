@@ -7,9 +7,19 @@ import ProductDrawer from './components/ProductDrawer.vue'
 import AddProductDialog from './components/AddProductDialog.vue'
 import ReviewView from './components/ReviewView.vue'
 import AdminView from './components/AdminView.vue'
+import AssetView from './components/AssetView.vue'
+import LabelsView from './components/LabelsView.vue'
+import PrintView from './components/PrintView.vue'
 
-const initialSection = window.location.hash.replace('#', '')
-const activeSection = ref(['directory', 'review', 'admin', 'inventory', 'wishlist', 'activity'].includes(initialSection) ? initialSection : 'directory')
+const SECTIONS = ['directory', 'review', 'admin', 'inventory', 'labels', 'print', 'wishlist', 'activity']
+const readHash = () => window.location.hash.replace('#', '')
+const activeSection = ref(SECTIONS.includes(readHash()) ? readHash() : 'directory')
+// The print sheet is a standalone route: it is opened from the label queue by
+// setting the hash, so the shell has to follow hash changes, not only emit them.
+window.addEventListener('hashchange', () => {
+  const section = readHash()
+  if (SECTIONS.includes(section) && section !== activeSection.value) activeSection.value = section
+})
 const products = ref([])
 const loading = ref(true)
 const loadError = ref('')
@@ -20,6 +30,8 @@ const view = ref('grid')
 const selectedProduct = ref(null)
 const addDialogOpen = ref(false)
 const reviewPending = ref(0)
+const toast = ref('')
+const toastError = ref(false)
 
 async function loadReviewPending() {
   try {
@@ -109,13 +121,36 @@ function resetFilters() {
   lineFilter.value = ''
 }
 
+function flash(text, isError = false) {
+  toast.value = text
+  toastError.value = isError
+  window.clearTimeout(flash.timer)
+  flash.timer = window.setTimeout(() => { toast.value = '' }, 3000)
+}
+
+async function ownProduct(product) {
+  try {
+    const response = await fetch('/api/v1/assets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ product_id: product.id, state: 'pending' }),
+    })
+    const body = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(body.detail || `请求失败 (${response.status})`)
+    flash(`${product.kit_name} → ${body.code}（待拼）`)
+  } catch (exc) {
+    flash(exc.message, true)
+  }
+}
+
 function onCreated(product) {
   products.value.push(product)
   selectedProduct.value = product
 }
 
 watch(activeSection, (section) => {
-  window.location.hash = section === 'directory' ? '' : section
+  const target = section === 'directory' ? '' : section
+  if (readHash() !== target) window.location.hash = target
 })
 
 onMounted(() => {
@@ -125,7 +160,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <PrintView v-if="activeSection === 'print'" />
+  <div v-else class="app-shell">
     <SidebarNav :active="activeSection" :total="products.length" :pending="reviewPending" @change="activeSection = $event" />
 
     <main class="content">
@@ -153,7 +189,7 @@ onMounted(() => {
 
         <section v-if="loading" class="state-panel"><LoaderCircle class="spin" :size="26" /><p>正在读取产品目录...</p></section>
         <section v-else-if="loadError" class="state-panel error-state"><p>{{ loadError }}</p><button class="secondary-button" type="button" @click="loadProducts"><RefreshCw :size="16" />重新加载</button></section>
-        <section v-else-if="filteredProducts.length" class="products" :class="`view-${view}`"><ProductCard v-for="product in filteredProducts" :key="product.id" :product="product" :view="view" @select="selectedProduct = $event" /></section>
+        <section v-else-if="filteredProducts.length" class="products" :class="`view-${view}`"><ProductCard v-for="product in filteredProducts" :key="product.id" :product="product" :view="view" @select="selectedProduct = $event" @own="ownProduct" /></section>
         <section v-else class="state-panel"><p>没有符合条件的产品。</p><button class="secondary-button" type="button" @click="resetFilters">清除筛选</button></section>
       </section>
 
@@ -165,9 +201,17 @@ onMounted(() => {
         <AdminView />
       </section>
 
+      <section v-else-if="activeSection === 'inventory'" class="asset-section">
+        <AssetView />
+      </section>
+
+      <section v-else-if="activeSection === 'labels'" class="labels-section">
+        <LabelsView />
+      </section>
+
       <section v-else class="mock-view">
         <header class="page-header"><div><p class="eyebrow">模拟模块</p><h1>{{ { inventory: '资产清点', wishlist: '愿望单', activity: '活动记录' }[activeSection] }}</h1><p class="page-subtitle">此区域暂用前端模拟数据，尚未连接数据库。</p></div></header>
-        <div v-if="activeSection === 'inventory'" class="mock-grid"><section class="mock-panel"><h2>收纳概览</h2><strong>48</strong><p>盒装模型 · 模拟统计</p></section><section class="mock-panel"><h2>待确认位置</h2><strong>6</strong><p>可在后续资产模块处理</p></section><section class="mock-panel wide"><h2>最近清点</h2><div class="mock-line"><span>MG 百式 Ver.2.0</span><small>书柜 B-03</small></div><div class="mock-line"><span>HG 风灵高达</span><small>展示柜 A-01</small></div></section></div>
+        <div v-if="false" class="mock-grid"><section class="mock-panel"><h2>收纳概览</h2><strong>48</strong><p>盒装模型 · 模拟统计</p></section><section class="mock-panel"><h2>待确认位置</h2><strong>6</strong><p>可在后续资产模块处理</p></section><section class="mock-panel wide"><h2>最近清点</h2><div class="mock-line"><span>MG 百式 Ver.2.0</span><small>书柜 B-03</small></div><div class="mock-line"><span>HG 风灵高达</span><small>展示柜 A-01</small></div></section></div>
         <div v-else-if="activeSection === 'wishlist'" class="mock-grid"><section class="mock-panel wide"><h2>关注清单</h2><div class="mock-line"><span>RG 沙扎比 Special Coating</span><small>等待补货</small></div><div class="mock-line"><span>GK 独角兽胸像</span><small>待确认资料</small></div></section><section class="mock-panel"><h2>本月预算</h2><strong>¥ 800</strong><p>模拟数据</p></section></div>
         <div v-else class="mock-grid"><section class="mock-panel wide"><h2>近期记录</h2><div class="mock-line"><span>导入产品目录</span><small>195 条 · 初始化测试</small></div><div class="mock-line"><span>创建资料库</span><small>系统事件 · 模拟</small></div></section></div>
       </section>
@@ -175,5 +219,11 @@ onMounted(() => {
   </div>
 
   <ProductDrawer :product="selectedProduct" @close="selectedProduct = null" />
+  <p v-if="toast" class="app-toast" :class="{ 'is-error': toastError }">{{ toast }}</p>
   <AddProductDialog :open="addDialogOpen" @close="addDialogOpen = false" @created="onCreated" />
 </template>
+
+<style>
+.app-toast { position: fixed; right: 28px; bottom: 28px; z-index: 60; padding: 10px 14px; color: #1f4a3c; font-size: 13px; background: #e8f5ec; border: 1px solid #b9d9c4; border-radius: 7px; box-shadow: 0 8px 24px #17352a1f; }
+.app-toast.is-error { color: #8d3423; background: #fdeee9; border-color: #efc6ba; }
+</style>
