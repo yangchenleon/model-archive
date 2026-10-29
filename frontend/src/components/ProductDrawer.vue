@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue'
-import { Barcode, Building2, CalendarDays, ExternalLink, Tag, Trophy, Wallet, X } from 'lucide-vue-next'
+import { Barcode, Building2, CalendarDays, ExternalLink, Tag, Trophy, Truck, Wallet, X } from 'lucide-vue-next'
+import { channelLabel } from '../taxonomy'
 
 const props = defineProps({ product: { type: Object, default: null } })
 const emit = defineEmits(['close', 'open-collection'])
@@ -45,6 +46,7 @@ function formatDate(value) {
           <div><dt><Building2 :size="15" />厂商</dt><dd>{{ product.manufacturer || '未填写' }}</dd></div>
           <div><dt><Barcode :size="15" />产品编号</dt><dd>{{ product.product_code || '未填写' }}</dd></div>
           <div><dt><Tag :size="15" />系列</dt><dd>{{ product.product_line || '未填写' }}</dd></div>
+          <div><dt><Truck :size="15" />渠道</dt><dd>{{ channelLabel(product.release_channel) }}</dd></div>
           <div><dt><Wallet :size="15" />价格</dt><dd>{{ product.price || '未记录' }}</dd></div>
           <div><dt><CalendarDays :size="15" />入库时间</dt><dd>{{ formatDate(product.created_at) }}</dd></div>
           <div><dt><ExternalLink :size="15" />资料来源</dt><dd class="source-text">{{ product.source }}</dd></div>

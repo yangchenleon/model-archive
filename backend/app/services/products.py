@@ -8,6 +8,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.channels import RELEASE_CHANNELS
 from app.models import Manufacturer, Product, ProductLine, ReviewItem
 from app.schemas import ProductCreate, ProductUpdate
 from app.services.errors import Conflict, Invalid, NotFound
@@ -65,6 +66,11 @@ def require(session: Session, product_id: UUID) -> Product:
     return product
 
 
+def _validate_channel(channel: str | None) -> None:
+    if channel is not None and channel not in RELEASE_CHANNELS:
+        raise Invalid(f"release_channel 必须是 {list(RELEASE_CHANNELS)} 或 null")
+
+
 def _validate_line(session: Session, manufacturer_id: UUID, line_id: UUID | None) -> None:
     if line_id is not None:
         require_line(session, line_id, manufacturer_id)
@@ -76,6 +82,7 @@ def create(session: Session, payload: ProductCreate) -> Product:
         raise Invalid("产品名称不能为空")
     _require_manufacturer(session, payload.manufacturer_id)
     _validate_line(session, payload.manufacturer_id, payload.product_line_id)
+    _validate_channel(payload.release_channel)
     if find_duplicate(
         session, payload.manufacturer_id, payload.product_line_id, kit_name
     ) is not None:
@@ -102,6 +109,7 @@ def create_many(session: Session, payloads: list[ProductCreate]) -> list[Product
             raise Invalid(f"第 {index} 条产品名称为空")
         _require_manufacturer(session, item.manufacturer_id)
         _validate_line(session, item.manufacturer_id, item.product_line_id)
+        _validate_channel(item.release_channel)
         key = (item.manufacturer_id, item.product_line_id, kit_name)
         if key in seen:
             raise Conflict(f"第 {index} 条与本次提交内的产品重复：{kit_name}")
@@ -118,6 +126,21 @@ def create_many(session: Session, payloads: list[ProductCreate]) -> list[Product
     for product in products:
         session.refresh(product)
     return products
+
+
+def set_channel_many(session: Session, product_ids: list[UUID], channel: str | None) -> int:
+    if not product_ids:
+        raise Invalid("至少选择一条产品")
+    if len(product_ids) > BULK_LIMIT:
+        raise Invalid(f"单次最多 {BULK_LIMIT} 条")
+    _validate_channel(channel)
+    result = session.execute(
+        update(Product)
+        .where(Product.id.in_(product_ids))
+        .values(release_channel=channel)
+    )
+    session.commit()
+    return result.rowcount or 0
 
 
 def update_product(session: Session, product_id: UUID, payload: ProductUpdate) -> Product:
@@ -139,6 +162,9 @@ def update_product(session: Session, product_id: UUID, payload: ProductUpdate) -
     if manufacturer_id is None:
         raise Invalid("厂商不能为空")
     _require_manufacturer(session, manufacturer_id)
+
+    if "release_channel" in data:
+        _validate_channel(data["release_channel"])
 
     target_line_id = data.get("product_line_id", product.product_line_id)
     if "product_line_id" in data:

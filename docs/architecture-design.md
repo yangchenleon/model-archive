@@ -22,6 +22,7 @@
 | `id` | 内部 UUID 主键，不对用户暴露。 |
 | `manufacturer_id` | → `manufacturers`，必填；产品身份的一半。 |
 | `product_line_id` | → `product_lines`，可空；空 = 未知。系列不参与身份。 |
+| `release_channel` | 发售渠道：`regular / pb / limited / event / other`，空 = 未知。只是过滤属性，不参与查重。 |
 | `product_code` | 自由文本，可空；厂商给产品的市场编号。 |
 | `kit_name` | 产品识别信息，模型名称必填；版本/配色以括号并入名称。 |
 | `price` | 当前价格，自由文本（`78`、`68元`、`22000日元`、`299-398`），不拆数值/币种。 |
@@ -35,6 +36,7 @@
 - `product_lines`：**按厂家归属的平铺系列**，`(manufacturer_id, name)` 唯一；HG、HGUC、HG GTO 是不同系列，不做层级。删除系列 → 产品 `product_line_id` 置 NULL（未知）。
 - 没有别名表：名字错了就改，不做映射。
 - 后台入口：`/#taxonomy`（厂家管理）。设计见 [manufacturer-and-line-taxonomy.md](manufacturer-and-line-taxonomy.md)。
+- 渠道是产品的独立字段，不是系列层级；78dm 的“级别或分类”不等于渠道。
 
 ### `review_items`
 
@@ -93,7 +95,7 @@ backend/app/
 
 资产、标签、收藏集已落地（`/#inventory`、`/#labels`、`/#collections`），产品目录已改为厂家优先
 （`/#directory`），厂家/系列分类与后台管理也已落地（`/#taxonomy`，迁移 `0022`）。下一步是后台数据治理：
-把 79 家未分类厂家归到 高达/国模/KO，清理 162 个系列，并处理仅剩的 1 组同厂商同系列同名产品。
+厂家分类已完成（1 高达 / 21 国模 / 62 KO），下一步是继续整理 157 个系列、补齐 30 个未知系列产品，并处理仅剩的 1 组同厂商同系列同名产品。
 
 位置尚未固定，所以**不做**容器/摆放模型；等“某个箱子固定放某几台、并且要按位置找东西”时再加，
 用已有的 `assets.id` 关联，标签不用重贴。

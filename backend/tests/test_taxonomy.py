@@ -284,6 +284,69 @@ def test_manufacturer_deletion_is_blocked_while_products_exist(client):
     assert client.get(f"/api/v1/manufacturers/{empty['id']}").status_code == 404
 
 
+def test_release_channel_is_closed_validated_and_filterable(client):
+    maker = make_manufacturer(client, "渠道厂")
+    regular = make_product(client, maker["id"], "通贩机体", release_channel="regular")
+    pb = make_product(client, maker["id"], "PB机体", release_channel="pb")
+    assert regular["release_channel"] == "regular"
+    assert pb["release_channel"] == "pb"
+
+    invalid = client.post(
+        "/api/v1/products",
+        json={
+            "kit_name": "坏渠道机体",
+            "manufacturer_id": maker["id"],
+            "release_channel": "not-a-channel",
+            "source": "pytest",
+        },
+    )
+    assert invalid.status_code == 422
+
+    filtered = client.get(
+        "/api/v1/products",
+        params={"release_channel": "pb", "search": "PB机体"},
+    )
+    assert filtered.status_code == 200
+    rows = filtered.json()
+    assert [row["id"] for row in rows] == [pb["id"]]
+
+    assert client.get(
+        "/api/v1/products", params={"release_channel": "not-a-channel"}
+    ).status_code == 422
+
+    cleared = client.patch(
+        f"/api/v1/products/{pb['id']}",
+        json={"release_channel": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["release_channel"] is None
+
+
+def test_bulk_channel_update(client):
+    maker = make_manufacturer(client, "批量渠道厂")
+    first = make_product(client, maker["id"], "批量渠道一")
+    second = make_product(client, maker["id"], "批量渠道二")
+
+    response = client.patch(
+        "/api/v1/products/bulk-channel",
+        json={"product_ids": [first["id"], second["id"]], "release_channel": "pb"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["updated"] == 2
+    assert client.get(f"/api/v1/products/{first['id']}").json()["release_channel"] == "pb"
+    assert client.get(f"/api/v1/products/{second['id']}").json()["release_channel"] == "pb"
+
+    invalid = client.patch(
+        "/api/v1/products/bulk-channel",
+        json={"product_ids": [first["id"]], "release_channel": "bad"},
+    )
+    assert invalid.status_code == 422
+    assert client.patch(
+        "/api/v1/products/bulk-channel",
+        json={"product_ids": [], "release_channel": "pb"},
+    ).status_code == 422
+
+
 def test_review_create_uses_selected_manufacturer_and_line(client, db):
     maker = make_manufacturer(client, "审核厂")
     line = make_line(client, maker["id"], "RG")
@@ -305,12 +368,14 @@ def test_review_create_uses_selected_manufacturer_and_line(client, db):
             "manufacturer_id": maker["id"],
             "product_line_id": line["id"],
             "kit_name": "审核机体",
+            "release_channel": "pb",
         },
     )
     assert response.status_code == 200, response.text
     product = response.json()
     assert product["manufacturer_id"] == maker["id"]
     assert product["product_line_id"] == line["id"]
+    assert product["release_channel"] == "pb"
 
     db.refresh(item)
     assert item.state == "created"

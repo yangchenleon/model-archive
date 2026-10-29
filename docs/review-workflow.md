@@ -15,8 +15,8 @@
 `products`
 
 ```text
-id, manufacturer_id, product_line_id(可空), product_code, kit_name, detail,
-source, price(自由文本), created_at
+id, manufacturer_id, product_line_id(可空), release_channel(可空),
+product_code, kit_name, detail, source, price(自由文本), created_at
 ```
 
 `review_items`
@@ -34,13 +34,14 @@ product_id, state, skip_reason, created_at, reviewed_at
 - `status_raw` 只是抽取原文，不参与产品表；产品没有状态
 - `brand` / `line` 保留抽取原文；`manufacturer_id` / `product_line_id` 是人工匹配结果
 - 产品身份是 `(manufacturer_id, product_line_id, kit_name)`；系列参与身份，同厂商同名但不同系列算不同产品；未知系列是独立一档
+- 渠道是产品属性：`regular / pb / limited / event / other`，空 = 未知；不参与产品身份
 
 ## 3. 审核页
 
 侧栏「入库审核」，一次一条，默认按 **厂商 → 产品 → 时间** 排序（可切时间/产品）。
 
 - 左卡片：日期、厂商·产品、原视频内嵌播放（跳到 mention 秒数）、原文引句、
-  抽取阶段/价格/系列；可改厂商（可搜索）、产品编号、产品名、系列、价格
+  抽取阶段/价格/系列；可改厂商（可搜索）、产品编号、产品名、系列、渠道、价格
 - 厂商选择器按名称搜索；匹配不到时提示去「厂家管理」新建，刷新页面后再匹配。
   **不在审核页自动建厂**。系列下拉只列当前厂家的系列，留空 = 未知
 - 右侧：搜索现有产品（只读参考），选中后可「映射」
@@ -57,7 +58,7 @@ product_id, state, skip_reason, created_at, reviewed_at
 
 侧栏「后台管理」（`/#admin`）：新增、编辑、删除产品；侧栏「厂家管理」（`/#taxonomy`）维护厂家和系列。
 
-- **新增**：手工录入（来源默认“手动录入”）；必须选厂商，系列可空；走
+- **新增**：手工录入（来源默认“手动录入”）；必须选厂商，系列/渠道可空；走
   `(manufacturer_id, product_line_id, kit_name)` 精确查重；同厂商同名但不同系列允许
 - **查看/编辑**：点击表格行打开只读详情；只有行右侧的铅笔进入编辑。弹窗不响应背景点击，
   框选文字时鼠标划出弹窗不会误关，只能点 X / 取消 / 关闭
@@ -81,6 +82,7 @@ product_id, state, skip_reason, created_at, reviewed_at
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
 | POST | `/api/v1/products` | 手工新增产品（需 `manufacturer_id`；同厂商同系列同名返回 409） |
+| GET | `/api/v1/products?release_channel=pb` | 按渠道筛选（可选） |
 | POST | `/api/v1/products/bulk` | 批量新增（全成全败，单次 ≤500 条） |
 | GET | `/api/v1/products/{id}/review-items` | 该产品关联的审核记录 |
 | GET | `/api/v1/manufacturers` | 厂家列表（`category` / `q` / `limit`） |
@@ -129,6 +131,6 @@ docker compose up -d api frontend
 ## 8. 已知取舍
 
 1. 映射不会更新产品字段（价格/编号改不了），修正走后台管理
-2. 查重只做 `(manufacturer_id, product_line_id, kit_name)` 精确匹配；不同厂商或不同系列同名算不同产品；没有别名/模糊归并
+2. 查重只做 `(manufacturer_id, product_line_id, kit_name)` 精确匹配；不同厂商或不同系列同名算不同产品；没有别名/模糊归并；渠道不参与查重
 3. 删产品会退回审核记录，但已经删除的 mention 不会回到队列
 4. 队列按 mention 组织，同一产品的多条 mention 仍会分别出现；重复内容靠跳过处理

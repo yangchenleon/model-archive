@@ -54,6 +54,12 @@ class ProductLine(Base):
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        CheckConstraint(
+            "release_channel IS NULL OR release_channel IN ('regular', 'pb', 'limited', 'event', 'other')",
+            name="ck_products_release_channel",
+        ),
+    )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     manufacturer_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("manufacturers.id", ondelete="RESTRICT"), index=True
@@ -63,6 +69,7 @@ class Product(Base):
     )
     product_code: Mapped[str | None] = mapped_column(String(120))
     kit_name: Mapped[str] = mapped_column(String(240))
+    release_channel: Mapped[str | None] = mapped_column(String(16), index=True)
     detail: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(160))
     price: Mapped[str | None] = mapped_column(String(64))

@@ -2,6 +2,7 @@
 import { reactive, ref, watch } from 'vue'
 import { LoaderCircle, Plus, X } from 'lucide-vue-next'
 import ManufacturerPicker from './ManufacturerPicker.vue'
+import { CHANNEL_OPTIONS } from '../taxonomy'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -16,6 +17,7 @@ const form = reactive({
   manufacturer_id: '',
   product_code: '',
   product_line_id: '',
+  release_channel: '',
   detail: '',
   source: '手动录入',
 })
@@ -87,6 +89,7 @@ async function submit() {
         kit_name: form.kit_name.trim(),
         manufacturer_id: form.manufacturer_id,
         product_line_id: form.product_line_id || null,
+        release_channel: form.release_channel || null,
         source: form.source.trim(),
         product_code: valueOrNull(form.product_code),
         detail: valueOrNull(form.detail),
@@ -95,7 +98,7 @@ async function submit() {
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.detail || '保存失败')
     Object.assign(form, {
-      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', detail: '', source: '手动录入',
+      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', release_channel: '', detail: '', source: '手动录入',
     })
     lines.value = []
     emit('created', body)
@@ -130,6 +133,12 @@ async function submit() {
             <select v-model="form.product_line_id">
               <option value="">未知</option>
               <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
+            </select>
+          </label>
+          <label class="form-field"><span>渠道</span>
+            <select v-model="form.release_channel">
+              <option value="">未知</option>
+              <option v-for="channel in CHANNEL_OPTIONS" :key="channel.value" :value="channel.value">{{ channel.label }}</option>
             </select>
           </label>
           <label class="form-field"><span>资料来源 <b>*</b></span><input v-model="form.source" required placeholder="手动录入" /></label>

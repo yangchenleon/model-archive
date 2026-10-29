@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.channels import RELEASE_CHANNELS
 from app.db import get_session
 from app.models import Manufacturer, Product, ProductLine
-from app.schemas import ProductCollectionRead, ProductCreate, ProductRead, ProductUpdate
+from app.schemas import ProductBulkChannel, ProductCollectionRead, ProductCreate, ProductRead, ProductUpdate
 from app.services import collections as collection_service
 from app.services import products as service
 
@@ -31,6 +32,7 @@ def bulk_create_products(payload: list[ProductCreate], session: Session = Depend
 @router.get("/products", response_model=list[ProductRead])
 def list_products(
     search: str | None = None,
+    release_channel: str | None = None,
     limit: int = Query(default=100, le=2000),
     session: Session = Depends(get_session),
 ) -> list[Product]:
@@ -46,6 +48,13 @@ def list_products(
         )
         .limit(limit)
     )
+    if release_channel is not None:
+        if release_channel not in RELEASE_CHANNELS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"release_channel 必须是 {list(RELEASE_CHANNELS)} 之一",
+            )
+        statement = statement.where(Product.release_channel == release_channel)
     if search:
         term = f"%{search.strip()}%"
         statement = statement.where(or_(
@@ -69,6 +78,15 @@ def list_product_collections(
 @router.get("/products/{product_id}", response_model=ProductRead)
 def get_product(product_id: UUID, session: Session = Depends(get_session)) -> Product:
     return service.require(session, product_id)
+
+
+@router.patch("/products/bulk-channel")
+def bulk_update_channel(
+    payload: ProductBulkChannel,
+    session: Session = Depends(get_session),
+) -> dict[str, int]:
+    updated = service.set_channel_many(session, payload.product_ids, payload.release_channel)
+    return {"updated": updated}
 
 
 @router.patch("/products/{product_id}", response_model=ProductRead)

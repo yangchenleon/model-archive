@@ -6,6 +6,25 @@ export const CATEGORY_META = {
 
 export const CATEGORY_ORDER = ['gundam', 'guomo', 'ko']
 
+export const CHANNEL_META = {
+  regular: { label: '通贩', order: 0 },
+  pb: { label: 'PB', order: 1 },
+  limited: { label: '限定', order: 2 },
+  event: { label: '会场', order: 3 },
+  other: { label: '其他', order: 4 },
+  unknown: { label: '未知', order: 5 },
+}
+
+export const CHANNEL_OPTIONS = Object.entries(CHANNEL_META).map(([value, meta]) => ({
+  value,
+  label: meta.label,
+  order: meta.order,
+}))
+
+export function channelLabel(value) {
+  return CHANNEL_META[value || 'unknown']?.label || '未知'
+}
+
 export function categoryLabel(category) {
   return CATEGORY_META[category]?.label || '未分类'
 }

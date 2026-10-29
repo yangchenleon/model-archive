@@ -13,7 +13,7 @@ import PrintView from './components/PrintView.vue'
 import CollectionsView from './components/CollectionsView.vue'
 import CollectionDetail from './components/CollectionDetail.vue'
 import TaxonomyAdmin from './components/TaxonomyAdmin.vue'
-import { categoryLabel, categoryOrder, fetchManufacturers } from './taxonomy'
+import { CHANNEL_OPTIONS, categoryLabel, categoryOrder, channelLabel, fetchManufacturers } from './taxonomy'
 
 const SECTIONS = ['directory', 'review', 'admin', 'taxonomy', 'inventory', 'collections', 'labels', 'print', 'wishlist', 'activity']
 const activeSection = ref('directory')
@@ -67,6 +67,7 @@ const loading = ref(true)
 const loadError = ref('')
 const search = ref('')
 const lineFilter = ref('')
+const channelFilter = ref('')
 const makerFilter = ref('')
 const view = ref('grid')
 const addDialogOpen = ref(false)
@@ -112,9 +113,33 @@ const productLines = computed(() => {
   return [...new Set(sourceList.map((item) => item.product_line || '未知'))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
 })
 
+// 渠道只列当前范围里实际出现的值，并带数量；未知单独一项
+const productChannels = computed(() => {
+  const sourceList = products.value.filter((item) => {
+    if (makerFilter.value && makerName(item) !== makerFilter.value) return false
+    if (lineFilter.value && (item.product_line || '未知') !== lineFilter.value) return false
+    return true
+  })
+  const counts = new Map()
+  for (const item of sourceList) {
+    const key = item.release_channel || 'unknown'
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  return CHANNEL_OPTIONS
+    .filter((option) => counts.has(option.value))
+    .map((option) => ({ ...option, count: counts.get(option.value) }))
+})
+
 // 如果先选系列，再选厂商的话，则产品恢复全局筛选（清空已选系列）
 watch(makerFilter, () => {
   lineFilter.value = ''
+  channelFilter.value = ''
+})
+
+watch(lineFilter, () => {
+  if (channelFilter.value && !productChannels.value.some((channel) => channel.value === channelFilter.value)) {
+    channelFilter.value = ''
+  }
 })
 
 const selectedMaker = computed(() => (directoryMaker.value && directoryMaker.value !== 'all' ? directoryMaker.value : ''))
@@ -238,8 +263,12 @@ const filteredProducts = computed(() => {
   return products.value
     .filter((item) => {
       const lineName = item.product_line || '未知'
-      const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, lineName].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
-      return matchText && (!makerFilter.value || makerName(item) === makerFilter.value) && (!lineFilter.value || lineName === lineFilter.value)
+      const channelName = item.release_channel || 'unknown'
+      const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, lineName, channelLabel(channelName)].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
+      return matchText
+        && (!makerFilter.value || makerName(item) === makerFilter.value)
+        && (!lineFilter.value || lineName === lineFilter.value)
+        && (!channelFilter.value || channelName === channelFilter.value)
     })
     .slice()
     .sort((a, b) => {
@@ -295,6 +324,7 @@ async function loadProducts() {
 function resetFilters() {
   search.value = ''
   lineFilter.value = ''
+  channelFilter.value = ''
   if (!selectedMaker.value) makerFilter.value = ''
 }
 
@@ -445,11 +475,12 @@ onMounted(() => {
 
           <section class="toolbar" aria-label="产品筛选">
             <label class="search-field"><Search :size="18" /><input v-model="search" type="search" :placeholder="selectedMaker ? '搜索当前厂牌的产品' : '搜索产品名、厂商或系列'" /></label>
+            <label class="select-field"><Filter :size="16" /><select v-model="channelFilter"><option value="">所有渠道</option><option v-for="channel in productChannels" :key="channel.value" :value="channel.value">{{ channel.label }} {{ channel.count }}</option></select></label>
             <template v-if="!selectedMaker">
               <label class="select-field"><Building2 :size="16" /><select v-model="makerFilter"><option value="">所有厂商</option><option v-for="maker in makers" :key="maker" :value="maker">{{ maker }}</option></select></label>
               <label class="select-field"><Filter :size="16" /><select v-model="lineFilter"><option value="">所有系列</option><option v-for="line in productLines" :key="line" :value="line">{{ line }}</option></select></label>
             </template>
-            <button v-if="search || lineFilter || (!selectedMaker && makerFilter)" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
+            <button v-if="search || lineFilter || channelFilter || (!selectedMaker && makerFilter)" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
             <span class="result-count">{{ filteredProducts.length }} 项</span>
             <div class="view-switch" aria-label="视图方式"><button :class="{ selected: view === 'grid' }" type="button" aria-label="网格视图" title="网格视图" @click="view = 'grid'"><Grid2X2 :size="17" /></button><button :class="{ selected: view === 'list' }" type="button" aria-label="列表视图" title="列表视图" @click="view = 'list'"><List :size="18" /></button></div>
           </section>

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Check, ExternalLink, LoaderCircle, RotateCcw, Search, SkipForward } from 'lucide-vue-next'
 import SkippedItems from './SkippedItems.vue'
 import ManufacturerPicker from './ManufacturerPicker.vue'
-import { fetchLines, fetchManufacturers } from '../taxonomy'
+import { CHANNEL_OPTIONS, fetchLines, fetchManufacturers } from '../taxonomy'
 
 const emit = defineEmits(['pending'])
 
@@ -27,7 +27,7 @@ const showSkipped = ref(false)
 
 const manufacturers = ref([])
 const lines = ref([])
-const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', price_text: '' })
+const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', release_channel: '', price_text: '' })
 const search = ref('')
 const candidates = ref([])
 const selected = ref(null)
@@ -96,6 +96,7 @@ async function prepare(next) {
   form.kit_name = next.variant ? `${next.product}（${next.variant}）` : (next.product || '')
   form.product_code = ''
   form.product_line_id = ''
+  form.release_channel = ''
   form.price_text = next.price_raw || ''
   selected.value = null
   search.value = next.product || ''
@@ -203,6 +204,7 @@ async function createProduct() {
         manufacturer_id: form.manufacturer_id,
         product_line_id: form.product_line_id || null,
         kit_name: form.kit_name.trim(),
+        release_channel: form.release_channel || null,
         product_code: form.product_code.trim() || null,
         detail: item.value.detail,
         price_text: form.price_text.trim() || null,
@@ -344,6 +346,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             <select v-model="form.product_line_id">
               <option value="">未知</option>
               <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
+            </select>
+          </label>
+          <label><span>渠道</span>
+            <select v-model="form.release_channel">
+              <option value="">未知</option>
+              <option v-for="channel in CHANNEL_OPTIONS" :key="channel.value" :value="channel.value">{{ channel.label }}</option>
             </select>
           </label>
           <label><span>价格</span><input v-model="form.price_text" placeholder="78 / 68元 / 22000日元" /></label>
