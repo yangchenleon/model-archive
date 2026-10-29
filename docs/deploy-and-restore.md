@@ -1,7 +1,7 @@
 # 在另一台主机部署并导入数据
 
 > 适用：Docker Compose + PostgreSQL 16。本文以当前导出的
-> `backups/model-archive-20261028.dump`（custom format，287 KB）为例。
+> `backups/model-archive-20261028.dump`（custom format，304 KB）为例。
 > 目标主机只需要 Docker、Compose、代码和这个 dump；不需要把源主机的数据库目录拷过去。
 
 ## 0. 需要带到新主机的东西
@@ -16,7 +16,7 @@
 当前 dump 的内容（已在本机恢复到临时库验证）：
 
 ```text
-products        1254
+products        1446
 review_items     875
 assets             0
 tags               0
@@ -24,7 +24,7 @@ collections        0
 collection_items   0
 manufacturers     84
 product_lines    157
-alembic          0023_product_release_channel
+alembic          0024_product_work
 ```
 
 > 资产/标签/收藏集是 0，是因为导出时还没有这些数据；导入后目录、审核队列是完整的。
@@ -45,8 +45,8 @@ git log --oneline -1
 git clone https://github.com/yangchenleon/model-archive.git
 ```
 
-代码要和 dump 的迁移版本匹配：dump 的 `alembic_version` 是 `0023_product_release_channel`，
-当前 `main` 已经包含到 `0023`。以后如果先拉代码后导旧 dump，API 启动时会自动
+代码要和 dump 的迁移版本匹配：dump 的 `alembic_version` 是 `0024_product_work`，
+当前 `main` 已经包含到 `0024`。以后如果先拉代码后导旧 dump，API 启动时会自动
 `alembic upgrade head` 补迁移。
 
 ---
@@ -100,7 +100,7 @@ Windows PowerShell：
 ```powershell
 Get-FileHash .\backups\model-archive-20261028.dump -Algorithm SHA256
 Get-Content .\backups\model-archive-20261028.dump.sha256
-# 两个哈希应一致：bd3b83ddb5b5531a8282ac9549f5f461454db9355d5c9b57ae0cab3917922c16
+# 两个哈希应一致：6f8a23c92d5b86abf0a5dfc4e7813a9dd01c400c559c288e23a069242d39dbd4
 ```
 
 > dump 是 custom format（`pg_dump -Fc`），不是纯 SQL 文本；用 `pg_restore` 导入，不要直接 `psql < file`。
@@ -171,7 +171,7 @@ select
 ```text
  products | review_items | assets | tags | collections | collection_items | manufacturers | product_lines |          alembic
 ----------+--------------+--------+------+-------------+------------------+---------------+---------------+----------------------------
-     1254 |          875 |      0 |    0 |           0 |                0 |            84 |           157 | 0023_product_release_channel
+     1446 |          875 |      0 |    0 |           0 |                0 |            84 |           157 | 0024_product_work
 ```
 
 ---
@@ -183,7 +183,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-API 容器启动时会执行 `alembic upgrade head`。因为 dump 已经是 `0023_product_release_channel`，
+API 容器启动时会执行 `alembic upgrade head`。因为 dump 已经是 `0024_product_work`，
 这一步是 no-op；如果导入的是旧 dump，它会自动补迁移。
 
 健康检查：
@@ -201,9 +201,9 @@ http://<新主机IP>:5173
 
 页面：
 
-- 产品目录：应看到 1254 条
+- 产品目录：应看到 1446 条，其中万代 RG 235 条
 - 入库审核：875 条记录
-- 厂家管理：84 家厂家、157 个系列；厂家分类已完成，渠道全部未填写，属于正常
+- 厂家管理：84 家厂家、157 个系列；厂家分类已完成，作品已填 18 条
 - 我的资产 / 标签队列 / 收藏集：0 条，属于正常
 - Adminer：`http://<新主机IP>:18082`，server 填 `db`
 

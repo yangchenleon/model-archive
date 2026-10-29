@@ -33,6 +33,7 @@ def bulk_create_products(payload: list[ProductCreate], session: Session = Depend
 def list_products(
     search: str | None = None,
     release_channel: str | None = None,
+    work: str | None = None,
     limit: int = Query(default=100, le=2000),
     session: Session = Depends(get_session),
 ) -> list[Product]:
@@ -55,6 +56,8 @@ def list_products(
                 detail=f"release_channel 必须是 {list(RELEASE_CHANNELS)} 之一",
             )
         statement = statement.where(Product.release_channel == release_channel)
+    if work:
+        statement = statement.where(Product.work == work)
     if search:
         term = f"%{search.strip()}%"
         statement = statement.where(or_(

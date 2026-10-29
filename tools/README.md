@@ -27,6 +27,18 @@ date, scale, material, specification, toy category, source category, channel)
 and the local image path. The site's `级别或分类` is not treated as a channel;
 see [docs/manufacturer-and-line-taxonomy.md](../docs/manufacturer-and-line-taxonomy.md).
 
+Preview and apply the RG replacement (the apply step deletes the existing
+`万代 / RG` products and inserts the manifest's 235 rows):
+
+```bash
+.venv/bin/python tools/import_78dm_rg.py           # dry run
+.venv/bin/python tools/import_78dm_rg.py --apply   # destructive replace
+```
+
+The importer keeps all rows on `line=RG`, strips a leading numeric index from
+the name, and fills `work` only for the explicit EVANGELION / 勇者王 / 机动警察
+subcategories. Gundam work remains NULL until sourced reliably.
+
 ## Background and scope
 
 This project uses source videos to populate the existing product-directory CSV

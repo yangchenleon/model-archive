@@ -95,6 +95,7 @@ def create_product(session: Session, item_id: UUID, payload: ReviewCreateRequest
         product_line_id=payload.product_line_id,
         product_code=(payload.product_code.strip() if payload.product_code and payload.product_code.strip() else None),
         kit_name=kit_name,
+        work=payload.work,
         release_channel=payload.release_channel,
         detail=payload.detail or item.detail,
         source=f"https://www.bilibili.com/video/{item.video_id}" if item.video_id else "手动录入",

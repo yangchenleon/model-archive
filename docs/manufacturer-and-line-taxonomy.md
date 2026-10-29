@@ -38,16 +38,22 @@
    - 渠道是封闭维度，不是 78dm 的“级别或分类”。例如 SEED 页面里的 `HG SEED HD`、`1/100 SEED` 是 line/规格，`网络限定` 才是 PB 渠道。
    - 不要做“系列 → 子系列 → 渠道”的树。
 
+7. **作品/IP 是第三个正交维度**
+   - `products.work` 可空，例如 `EVANGELION`、`勇者王`、`机动警察`、`SEED`。
+   - 同一个 `RG` line 下可以有多个作品；不能把 EVA 拆成 `RG EVA` 新 line。
+   - 不参与产品身份查重。
+
 ## 二、当前数据（迁移后）
 
 | 指标 | 数值 |
 | --- | ---: |
-| 产品 | 1254 |
+| 产品 | 1446 |
 | 厂家 | 84 |
 | 系列 | 157 |
 | 系列为未知的产品 | 30 |
 | 未分类厂家 | 0 |
 | 系列名去重 | 84 |
+| 已标注作品/IP | 18 |
 
 初始分类/等级只填了明确点名的；其余 79 家后来已在后台归类，目前分类为 1 高达 / 21 国模 / 62 KO，未分类为 0：
 
@@ -60,7 +66,7 @@
 | 猛虎模型 | KO | 1 |
 | 其余 79 家 | 后台归类 | 已分类 |
 
-B社仍是独立厂家（未分类）；它是否并入万代，需要人工判断，系统不自动合并。
+B社仍是独立厂家；它是否并入万代，需要人工判断，系统不自动合并。
 
 > 目录里原本有 17 组同厂商同名产品（37 行）。现在产品身份改为 `(manufacturer_id, product_line_id, kit_name)`：其中 16 组是“同名但不同系列”，按新规则是合法产品；只剩 **1 组同厂商同系列同名**：大班 / 88系列 / `MB 金异端 天·蜜娜`（编号 8804、8826）。`products` 目前没有数据库唯一约束，只由服务层阻止新增重复；这 1 组需要人工判断是否合并。
 
@@ -92,7 +98,9 @@ product_lines (
 
 products (
     manufacturer_id uuid not null references manufacturers(id) on delete restrict,
-    product_line_id uuid references product_lines(id) on delete set null
+    product_line_id uuid references product_lines(id) on delete set null,
+    work varchar(120),           -- 作品/IP，例如 EVANGELION；可空
+    release_channel varchar(16)  -- regular/pb/limited/event/other；可空
 )
 
 review_items (
@@ -197,6 +205,7 @@ review_items (
 2. 157 个系列的清理：改名、删掉不用的系列、补齐 30 个“未知”产品。
 3. B社是否并入万代（目前保留独立）。
 4. 只剩 1 组同厂商同系列同名产品（大班 / 88系列 / `MB 金异端 天·蜜娜`，编号 8804、8826）需要人工判断是否合并；其余 16 组同名不同系列已按新规则合法。
+5. `work` 目前只填了 18 条非高达 RG（EVANGELION 14、勇者王 3、机动警察 1）；高达系作品留空，等可靠来源再补。
 
 ## 九、明确不做
 

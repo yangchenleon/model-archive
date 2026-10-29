@@ -347,6 +347,19 @@ def test_bulk_channel_update(client):
     ).status_code == 422
 
 
+def test_work_is_optional_metadata_and_filterable(client):
+    maker = make_manufacturer(client, "作品厂")
+    product = make_product(client, maker["id"], "EVA 初号机", work="TEST-WORK")
+    assert product["work"] == "TEST-WORK"
+
+    rows = client.get("/api/v1/products", params={"work": "TEST-WORK", "search": "EVA 初号机"}).json()
+    assert [row["id"] for row in rows] == [product["id"]]
+
+    cleared = client.patch(f"/api/v1/products/{product['id']}", json={"work": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["work"] is None
+
+
 def test_review_create_uses_selected_manufacturer_and_line(client, db):
     maker = make_manufacturer(client, "审核厂")
     line = make_line(client, maker["id"], "RG")
@@ -368,6 +381,7 @@ def test_review_create_uses_selected_manufacturer_and_line(client, db):
             "manufacturer_id": maker["id"],
             "product_line_id": line["id"],
             "kit_name": "审核机体",
+            "work": "EVANGELION",
             "release_channel": "pb",
         },
     )
@@ -375,6 +389,7 @@ def test_review_create_uses_selected_manufacturer_and_line(client, db):
     product = response.json()
     assert product["manufacturer_id"] == maker["id"]
     assert product["product_line_id"] == line["id"]
+    assert product["work"] == "EVANGELION"
     assert product["release_channel"] == "pb"
 
     db.refresh(item)

@@ -27,7 +27,7 @@ const showSkipped = ref(false)
 
 const manufacturers = ref([])
 const lines = ref([])
-const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', release_channel: '', price_text: '' })
+const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', work: '', release_channel: '', price_text: '' })
 const search = ref('')
 const candidates = ref([])
 const selected = ref(null)
@@ -96,6 +96,7 @@ async function prepare(next) {
   form.kit_name = next.variant ? `${next.product}（${next.variant}）` : (next.product || '')
   form.product_code = ''
   form.product_line_id = ''
+  form.work = ''
   form.release_channel = ''
   form.price_text = next.price_raw || ''
   selected.value = null
@@ -204,6 +205,7 @@ async function createProduct() {
         manufacturer_id: form.manufacturer_id,
         product_line_id: form.product_line_id || null,
         kit_name: form.kit_name.trim(),
+        work: form.work.trim() || null,
         release_channel: form.release_channel || null,
         product_code: form.product_code.trim() || null,
         detail: item.value.detail,
@@ -348,6 +350,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
             </select>
           </label>
+          <label><span>作品 / IP</span><input v-model="form.work" placeholder="EVANGELION / 勇者王 …" /></label>
           <label><span>渠道</span>
             <select v-model="form.release_channel">
               <option value="">未知</option>

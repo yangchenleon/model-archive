@@ -70,6 +70,7 @@ class ProductCreate(BaseModel):
     product_line_id: UUID | None = None
     product_code: str | None = None
     kit_name: str
+    work: str | None = None
     release_channel: str | None = None
     detail: str | None = None
     source: str
@@ -81,6 +82,7 @@ class ProductUpdate(BaseModel):
     product_line_id: UUID | None = None
     product_code: str | None = None
     kit_name: str | None = None
+    work: str | None = None
     release_channel: str | None = None
     detail: str | None = None
     source: str | None = None
@@ -101,6 +103,7 @@ class ProductRead(BaseModel):
     product_code: str | None = None
     product_line: str | None = None
     kit_name: str
+    work: str | None = None
     release_channel: str | None = None
     detail: str | None = None
     source: str
@@ -241,6 +244,7 @@ class ReviewCreateRequest(BaseModel):
     manufacturer_id: UUID
     product_line_id: UUID | None = None
     kit_name: str
+    work: str | None = None
     release_channel: str | None = None
     product_code: str | None = None
     detail: str | None = None
@@ -255,6 +259,7 @@ class ProductBrief(BaseModel):
     product_line_id: UUID | None = None
     manufacturer: str | None = None
     product_line: str | None = None
+    work: str | None = None
     release_channel: str | None = None
 
 

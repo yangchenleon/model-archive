@@ -22,6 +22,7 @@
 | `id` | 内部 UUID 主键，不对用户暴露。 |
 | `manufacturer_id` | → `manufacturers`，必填；产品身份的一半。 |
 | `product_line_id` | → `product_lines`，可空；空 = 未知。系列不参与身份。 |
+| `work` | 可空作品/IP，例如 `EVANGELION`、`勇者王`、`机动警察`、`SEED`；不是 line，不参与查重。 |
 | `release_channel` | 发售渠道：`regular / pb / limited / event / other`，空 = 未知。只是过滤属性，不参与查重。 |
 | `product_code` | 自由文本，可空；厂商给产品的市场编号。 |
 | `kit_name` | 产品识别信息，模型名称必填；版本/配色以括号并入名称。 |

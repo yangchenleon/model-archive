@@ -11,6 +11,7 @@ const SORT_FIELDS = [
   { key: 'kit_name', label: '产品' },
   { key: 'product_code', label: '编号' },
   { key: 'product_line', label: '系列' },
+  { key: 'work', label: '作品' },
   { key: 'release_channel', label: '渠道' },
   { key: 'price', label: '价格' },
   { key: 'created_at', label: '入库时间' },
@@ -40,14 +41,14 @@ const detailProduct = ref(null)
 const audit = ref([])
 const auditLoading = ref(false)
 const form = reactive({
-  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', release_channel: '', price: '', source: '', detail: '',
+  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', price: '', source: '', detail: '',
 })
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase()
   const rows = term
     ? products.value.filter((product) =>
-      [product.kit_name, product.manufacturer, product.product_code, product.product_line, channelLabel(product.release_channel), product.price]
+      [product.kit_name, product.manufacturer, product.product_code, product.product_line, product.work, channelLabel(product.release_channel), product.price]
         .filter(Boolean).join(' ').toLowerCase().includes(term))
     : products.value
   const direction = sortDirection.value === 'asc' ? 1 : -1
@@ -169,7 +170,7 @@ async function applyBulkChannel() {
 
 function resetForm() {
   Object.assign(form, {
-    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', release_channel: '',
+    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '',
     price: '', source: '手动录入', detail: '',
   })
   lines.value = []
@@ -199,6 +200,7 @@ async function openEdit(product) {
     manufacturer_id: product.manufacturer_id || '',
     product_code: product.product_code || '',
     product_line_id: product.product_line_id || '',
+    work: product.work || '',
     release_channel: product.release_channel || '',
     price: product.price || '',
     source: product.source || '',
@@ -233,6 +235,7 @@ function payload() {
     manufacturer_id: form.manufacturer_id || null,
     product_code: nullIfEmpty(form.product_code),
     product_line_id: form.product_line_id || null,
+    work: nullIfEmpty(form.work),
     release_channel: form.release_channel || null,
     price: nullIfEmpty(form.price),
     source: form.source.trim(),
@@ -293,12 +296,12 @@ async function removeProduct() {
 }
 
 function exportCsv() {
-  const headers = ['厂商', '产品编号', '系列', '渠道', '模型名称', '价格', '资料来源', '详情', '入库时间', 'id']
+  const headers = ['厂商', '产品编号', '系列', '作品', '渠道', '模型名称', '价格', '资料来源', '详情', '入库时间', 'id']
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const lines = [headers.join(',')]
   for (const product of filtered.value) {
     lines.push([
-      product.manufacturer, product.product_code, product.product_line, channelLabel(product.release_channel), product.kit_name,
+      product.manufacturer, product.product_code, product.product_line, product.work, channelLabel(product.release_channel), product.kit_name,
       product.price, product.source, product.detail, product.created_at, product.id,
     ].map(escape).join(','))
   }
@@ -377,6 +380,7 @@ loadProducts()
             <td class="name">{{ product.kit_name }}</td>
             <td class="code">{{ product.product_code || '—' }}</td>
             <td>{{ product.product_line || '—' }}</td>
+            <td>{{ product.work || '—' }}</td>
             <td>{{ channelLabel(product.release_channel) }}</td>
             <td class="price">{{ product.price || '—' }}</td>
             <td class="date">{{ (product.created_at || '').slice(0, 10) }}</td>
@@ -405,6 +409,7 @@ loadProducts()
               <div><dt>产品编号</dt><dd>{{ detailProduct.product_code || '—' }}</dd></div>
               <div><dt>产品名称</dt><dd>{{ detailProduct.kit_name }}</dd></div>
               <div><dt>系列</dt><dd>{{ detailProduct.product_line || '未知' }}</dd></div>
+              <div><dt>作品</dt><dd>{{ detailProduct.work || '—' }}</dd></div>
               <div><dt>渠道</dt><dd>{{ channelLabel(detailProduct.release_channel) }}</dd></div>
               <div><dt>价格</dt><dd>{{ detailProduct.price || '—' }}</dd></div>
               <div><dt>入库时间</dt><dd>{{ (detailProduct.created_at || '').slice(0, 10) }}</dd></div>
@@ -436,6 +441,7 @@ loadProducts()
                   <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
                 </select>
               </label>
+              <label><span>作品 / IP</span><input v-model="form.work" placeholder="例如：EVANGELION / 勇者王 / SEED" /></label>
               <label><span>渠道</span>
                 <select v-model="form.release_channel">
                   <option value="">未知</option>

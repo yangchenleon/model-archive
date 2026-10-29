@@ -223,9 +223,9 @@ def test_completed_only_when_every_target_is_owned(client):
 
 def test_item_filters_search_and_note(client):
     collection = make_collection(client)
-    first = make_product(client, "夏亚专用扎古II", manufacturer="万代", line="RG", code="02")
-    second = make_product(client, "量产型扎古II", manufacturer="万代", line="RG", code="04")
-    third = make_product(client, "神高达", manufacturer="万代", line="RG", code="43")
+    first = make_product(client, "夏亚专用扎古II", manufacturer="测试厂", line="RG", code="02")
+    second = make_product(client, "量产型扎古II", manufacturer="测试厂", line="RG", code="04")
+    third = make_product(client, "神高达", manufacturer="测试厂", line="RG", code="43")
     add_items(client, collection["id"], [first, second, third])
     make_asset(client, first, "stored")
 

@@ -17,6 +17,7 @@ const form = reactive({
   manufacturer_id: '',
   product_code: '',
   product_line_id: '',
+  work: '',
   release_channel: '',
   detail: '',
   source: '手动录入',
@@ -89,6 +90,7 @@ async function submit() {
         kit_name: form.kit_name.trim(),
         manufacturer_id: form.manufacturer_id,
         product_line_id: form.product_line_id || null,
+        work: valueOrNull(form.work),
         release_channel: form.release_channel || null,
         source: form.source.trim(),
         product_code: valueOrNull(form.product_code),
@@ -98,7 +100,7 @@ async function submit() {
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.detail || '保存失败')
     Object.assign(form, {
-      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', release_channel: '', detail: '', source: '手动录入',
+      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', detail: '', source: '手动录入',
     })
     lines.value = []
     emit('created', body)
@@ -135,6 +137,7 @@ async function submit() {
               <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
             </select>
           </label>
+          <label class="form-field"><span>作品 / IP</span><input v-model="form.work" placeholder="例如：EVANGELION / 勇者王 / SEED" /></label>
           <label class="form-field"><span>渠道</span>
             <select v-model="form.release_channel">
               <option value="">未知</option>
