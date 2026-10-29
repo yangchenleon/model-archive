@@ -140,7 +140,7 @@ prompt 里固定注入的通用常识：
 .venv-tools/bin/python -m tools.render_product_timeline
 
 # 回归：KO/第三方品牌归属（11 段真实字幕，全过才算通过）
-.venv-tools/bin/python -m tools.eval_ko_prompt
+.venv-tools/bin/python -m tests.eval_ko_prompt
 ```
 
 参数说明：

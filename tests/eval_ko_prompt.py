@@ -7,8 +7,8 @@ segments that were previously wrong, plus two controls where 万代 is correct
 (the reviewer's sarcastic "隔壁不知名小厂万代" phrasing).
 
 Usage:
-    .venv-tools/bin/python -m tools.eval_ko_prompt
-    .venv-tools/bin/python -m tools.eval_ko_prompt --only 1011
+    .venv-tools/bin/python -m tests.eval_ko_prompt
+    .venv-tools/bin/python -m tests.eval_ko_prompt --only 1011
 """
 from __future__ import annotations
 

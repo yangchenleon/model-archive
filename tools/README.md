@@ -216,8 +216,8 @@ giveaway segments, are dropped in code.
 The KO attribution has a targeted regression suite:
 
 ```bash
-.venv-tools/bin/python -m tools.eval_ko_prompt          # 11 real segments
-.venv-tools/bin/python -m tools.eval_ko_prompt --only 1011
+.venv-tools/bin/python -m tests.eval_ko_prompt          # 11 real segments
+.venv-tools/bin/python -m tests.eval_ko_prompt --only 1011
 ```
 
 `align_daily_products` groups mentions by `(brand, product, variant)` after

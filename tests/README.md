@@ -20,6 +20,8 @@ Current operational scripts:
 - `seed_review_queue.py` — idempotent seed of `review_items` from
   `outputs/products/products.json`. See
   [docs/review-workflow.md](../docs/review-workflow.md).
+- `eval_ko_prompt.py` — targeted KO/third-party brand-attribution regression
+  check (`python -m tests.eval_ko_prompt`).
 
 Do not assume the other scripts here are safe to run; many are historical
 investigations that hit the dev database or local artifacts.
