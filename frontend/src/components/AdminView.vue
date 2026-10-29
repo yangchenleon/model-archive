@@ -214,8 +214,8 @@ async function saveProduct() {
       flash('产品已新增')
     } else {
       const updated = await api(`/api/v1/products/${editing.value.id}`, { method: 'PATCH', body: JSON.stringify(payload()) })
-      editing.value = { ...updated }
       replaceProduct(updated)
+      closeEditor()
       flash('产品已保存')
     }
   } catch (exc) {
