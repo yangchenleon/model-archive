@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -163,9 +163,16 @@ def delete(session: Session, product_id: UUID) -> dict[str, str | int]:
     ) or 0
     if linked:
         session.execute(
-            update(ReviewItem)
+            sa_update(ReviewItem)
             .where(ReviewItem.product_id == product_id)
-            .values(state="pending", product_id=None, skip_reason=None, reviewed_at=None)
+            .values(
+                state="pending",
+                product_id=None,
+                manufacturer_id=None,
+                product_line_id=None,
+                skip_reason=None,
+                reviewed_at=None,
+            )
         )
     session.delete(product)
     try:

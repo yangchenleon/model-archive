@@ -214,6 +214,31 @@ def test_merge_manufacturer_rejects_product_name_collisions(client):
     assert client.get(f"/api/v1/manufacturers/{source['id']}").status_code == 200
 
 
+def test_delete_product_resets_linked_review_match(client, product, db):
+    item = ReviewItem(
+        source_key=f"delete-{uuid4()}",
+        event_date=date.today(),
+        brand="测试厂",
+        product=product["kit_name"],
+        state="mapped",
+        product_id=product["id"],
+        manufacturer_id=product["manufacturer_id"],
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+
+    response = client.delete(f"/api/v1/products/{product['id']}")
+    assert response.status_code == 200, response.text
+    assert response.json()["review_items_reset"] == 1
+
+    db.refresh(item)
+    assert item.state == "pending"
+    assert item.product_id is None
+    assert item.manufacturer_id is None
+    assert item.product_line_id is None
+
+
 def test_manufacturer_deletion_is_blocked_while_products_exist(client):
     maker = make_manufacturer(client, "有产品厂")
     make_product(client, maker["id"], "产品一")
