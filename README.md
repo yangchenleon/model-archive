@@ -15,6 +15,7 @@ docker compose up --build -d
 - Deploy to another host + import a database dump: [docs/deploy-and-restore.md](docs/deploy-and-restore.md)
 - Manufacturer directory assessment (historical): [docs/manufacturer-normalization.md](docs/manufacturer-normalization.md)
 - Manufacturer/series taxonomy (implemented): [docs/manufacturer-and-line-taxonomy.md](docs/manufacturer-and-line-taxonomy.md)
+- 78dm scraping and RG import runbook: [docs/78dm-scraping.md](docs/78dm-scraping.md)
 
 Adminer connection details: system `PostgreSQL`, server `db`, and the database/user/password from `.env`.
 

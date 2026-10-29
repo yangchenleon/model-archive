@@ -8,6 +8,10 @@ download_bilibili -> extract_audio -> transcribe -> extract_products
 
 ## 78dm scraper
 
+See [docs/78dm-scraping.md](../docs/78dm-scraping.md) for the full agent
+runbook (cookie handling, field mapping, import rules, verification and
+troubleshooting). Quick commands:
+
 78dm pages require the local `_identity` cookie (the root `78cookie2` file is
 gitignored). The scraper writes a reviewable JSON manifest and cover images
 under `imports/`; it does not write to PostgreSQL.
