@@ -6,6 +6,27 @@ The pipeline turns a video URL into the product CSV used by the archive:
 download_bilibili -> extract_audio -> transcribe -> extract_products
 ```
 
+## 78dm scraper
+
+78dm pages require the local `_identity` cookie (the root `78cookie2` file is
+gitignored). The scraper writes a reviewable JSON manifest and cover images
+under `imports/`; it does not write to PostgreSQL.
+
+```bash
+.venv/bin/python tools/scrape_78dm.py \
+  --url https://acg.78dm.net/ct/341672.html \
+  --out imports/78dm/341672
+
+# download/re-download images in parallel, resumable
+.venv/bin/python tools/download_78dm_images.py \
+  --dir imports/78dm/341672 --workers 8
+```
+
+`products.json` keeps the 78dm fields (name, version, code, price, release
+date, scale, material, specification, toy category, source category, channel)
+and the local image path. The site's `级别或分类` is not treated as a channel;
+see [docs/manufacturer-and-line-taxonomy.md](../docs/manufacturer-and-line-taxonomy.md).
+
 ## Background and scope
 
 This project uses source videos to populate the existing product-directory CSV
