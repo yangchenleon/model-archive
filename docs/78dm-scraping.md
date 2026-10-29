@@ -19,10 +19,10 @@
   --dir imports/78dm/341672 --workers 8
 
 # 3) 预览导入（不修改数据库）
-.venv/bin/python tools/import_78dm_rg.py
+.venv/bin/python tests/import_78dm_rg.py
 
 # 4) 确认后执行替换；会删除现有 万代/RG 产品
-.venv/bin/python tools/import_78dm_rg.py --apply
+.venv/bin/python tests/import_78dm_rg.py --apply
 ```
 
 当前示例 `341672` 是 `RG系列拼装模型`，共 235 款。
@@ -43,7 +43,9 @@
 tools/
   scrape_78dm.py           # 系列页 -> products.json + 可选封面
   download_78dm_images.py  # 根据 products.json 并发下载封面
-  import_78dm_rg.py        # 将 RG manifest 替换进 PostgreSQL
+tests/
+  import_78dm_rg.py        # 将 RG manifest 替换进 PostgreSQL（一次性任务）
+  seed_review_queue.py     # 审核队列一次性种子
 imports/78dm/<series-id>/
   series.json              # 系列信息、子分类、产品 URL 列表
   products.json            # 产品字段 + 本地封面相对路径

@@ -6,8 +6,8 @@ The import keeps all 235 products on the existing RG line. IP/work is filled
 only for the explicitly non-Gundam subcategories (EVANGELION, 勇者王, 机动警察);
 Gundam work is left NULL until it can be sourced reliably.
 
-Run:
-    .venv/bin/python tools/import_78dm_rg.py --apply
+Run from the repository root:
+    .venv/bin/python tests/import_78dm_rg.py --apply
 """
 
 from __future__ import annotations

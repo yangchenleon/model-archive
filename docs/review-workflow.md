@@ -110,7 +110,7 @@ product_id, state, skip_reason, created_at, reviewed_at
 
 ```bash
 docker compose up -d api frontend
-.venv-tools/bin/python -m tools.seed_review_queue   # 幂等，可重复执行
+.venv-tools/bin/python tests/seed_review_queue.py   # 幂等，可重复执行
 # 打开 http://127.0.0.1:5173/#review（或 .env 里的 FRONTEND_PORT）
 ```
 

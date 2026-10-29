@@ -35,13 +35,19 @@ Preview and apply the RG replacement (the apply step deletes the existing
 `万代 / RG` products and inserts the manifest's 235 rows):
 
 ```bash
-.venv/bin/python tools/import_78dm_rg.py           # dry run
-.venv/bin/python tools/import_78dm_rg.py --apply   # destructive replace
+.venv/bin/python tests/import_78dm_rg.py           # dry run
+.venv/bin/python tests/import_78dm_rg.py --apply   # destructive replace
 ```
 
 The importer keeps all rows on `line=RG`, strips a leading numeric index from
 the name, and fills `work` only for the explicit EVANGELION / 勇者王 / 机动警察
 subcategories. Gundam work remains NULL until sourced reliably.
+
+`tools/` is for reusable, mostly atomic fetch/extract/render steps. One-off
+database mutators live in `tests/` instead:
+
+- `tests/import_78dm_rg.py` — replace `万代/RG` from a local manifest
+- `tests/seed_review_queue.py` — idempotent review-queue seed
 
 ## Background and scope
 
@@ -228,7 +234,7 @@ The extracted mentions can be pushed into the database review queue and confirme
 one by one in the frontend (`/#review`):
 
 ```bash
-.venv-tools/bin/python -m tools.seed_review_queue
+.venv-tools/bin/python tests/seed_review_queue.py
 ```
 
 The queue, skip/map/create actions, and open design questions live in

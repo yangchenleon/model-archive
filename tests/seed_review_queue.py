@@ -4,7 +4,7 @@ Each mention in ``outputs/products/products.json`` becomes one ``review_items``
 row: the reviewer either maps it onto an existing product, creates a new one, or
 skips it. Re-running is idempotent (``source_key`` unique).
 
-    .venv-tools/bin/python -m tools.seed_review_queue
+    .venv-tools/bin/python tests/seed_review_queue.py
 """
 from __future__ import annotations
 
