@@ -10,6 +10,8 @@ __pycache__/
 imports/
 # Scratch files and throwaway downloads from ad-hoc tooling.
 .tmp/
+# Local 78dm cookies; never commit them.
+78cookie*
 # Local database dumps are not versioned.
 backups/
 ocr-results/
