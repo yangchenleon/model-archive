@@ -110,7 +110,7 @@ async function submit() {
 
 <template>
   <Transition name="dialog">
-    <div v-if="open" class="dialog-layer" @click.self="$emit('close')">
+    <div v-if="open" class="dialog-layer">
       <form class="dialog" @submit.prevent="submit">
         <header>
           <div><span class="eyebrow">新增条目</span><h2>录入产品</h2></div>

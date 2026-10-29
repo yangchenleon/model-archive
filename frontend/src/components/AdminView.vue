@@ -30,6 +30,7 @@ const sortDirection = ref('asc')
 
 const editorMode = ref(null) // 'create' | 'edit'
 const editing = ref(null)
+const detailProduct = ref(null)
 const audit = ref([])
 const auditLoading = ref(false)
 const form = reactive({
@@ -128,13 +129,22 @@ function resetForm() {
 }
 
 function openCreate() {
+  detailProduct.value = null
   editorMode.value = 'create'
   editing.value = null
   audit.value = []
   resetForm()
 }
 
+function openDetail(product) {
+  detailProduct.value = product
+  editorMode.value = null
+  editing.value = null
+  audit.value = []
+}
+
 async function openEdit(product) {
+  detailProduct.value = null
   editorMode.value = 'edit'
   editing.value = { ...product }
   Object.assign(form, {
@@ -159,6 +169,7 @@ async function openEdit(product) {
 }
 
 function closeEditor() {
+  detailProduct.value = null
   editorMode.value = null
   editing.value = null
   audit.value = []
@@ -297,7 +308,7 @@ loadProducts()
           </tr>
         </thead>
         <tbody>
-          <tr v-for="product in filtered" :key="product.id" @click="openEdit(product)">
+          <tr v-for="product in filtered" :key="product.id" @click="openDetail(product)">
             <td>{{ product.manufacturer || '—' }}</td>
             <td class="name">{{ product.kit_name }}</td>
             <td class="code">{{ product.product_code || '—' }}</td>
@@ -312,63 +323,85 @@ loadProducts()
     </section>
 
     <Transition name="dialog">
-      <div v-if="editorMode" class="dialog-layer" @click.self="closeEditor">
-        <section class="admin-dialog" aria-label="产品编辑">
+      <div v-if="detailProduct || editorMode" class="dialog-layer">
+        <section class="admin-dialog" :aria-label="detailProduct ? '产品详情' : '产品编辑'">
           <header>
             <div>
-              <span class="eyebrow">{{ editorMode === 'create' ? '新增产品' : '编辑产品' }}</span>
-              <h2>{{ editorMode === 'create' ? '手工录入' : editing.kit_name }}</h2>
+              <span class="eyebrow">{{ detailProduct ? '产品详情' : editorMode === 'create' ? '新增产品' : '编辑产品' }}</span>
+              <h2>{{ detailProduct ? detailProduct.kit_name : editorMode === 'create' ? '手工录入' : editing?.kit_name }}</h2>
             </div>
             <button class="icon-button" type="button" aria-label="关闭" @click="closeEditor"><X :size="20" /></button>
           </header>
 
-          <div class="admin-form">
-            <label><span>厂商 <b>*</b></span>
-              <ManufacturerPicker
-                v-model="form.manufacturer_id"
-                :manufacturers="manufacturers"
-                @change="onManufacturerChange"
-              />
-            </label>
-            <label><span>产品编号</span><input v-model="form.product_code" placeholder="RG32 / MDH-12E" /></label>
-            <label class="full"><span>产品名称 <b>*</b></span><input v-model="form.kit_name" /></label>
-            <label><span>系列</span>
-              <select v-model="form.product_line_id">
-                <option value="">未知</option>
-                <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
-              </select>
-            </label>
-            <label><span>价格</span><input v-model="form.price" placeholder="自由文本：78 / 68元 / 22000日元" /></label>
-            <label class="full"><span>资料来源 <b>*</b></span><input v-model="form.source" /></label>
-            <label class="full"><span>详情</span><textarea v-model="form.detail" rows="3"></textarea></label>
-          </div>
+          <template v-if="detailProduct">
+            <p class="detail-hint">只读查看；需要修改时关闭弹窗，点列表右侧的铅笔。</p>
+            <dl class="detail-grid">
+              <div><dt>厂商</dt><dd>{{ detailProduct.manufacturer || '—' }}</dd></div>
+              <div><dt>产品编号</dt><dd>{{ detailProduct.product_code || '—' }}</dd></div>
+              <div><dt>产品名称</dt><dd>{{ detailProduct.kit_name }}</dd></div>
+              <div><dt>系列</dt><dd>{{ detailProduct.product_line || '未知' }}</dd></div>
+              <div><dt>价格</dt><dd>{{ detailProduct.price || '—' }}</dd></div>
+              <div><dt>入库时间</dt><dd>{{ (detailProduct.created_at || '').slice(0, 10) }}</dd></div>
+              <div class="full"><dt>资料来源</dt><dd class="detail-text">{{ detailProduct.source || '—' }}</dd></div>
+              <div class="full"><dt>详情</dt><dd class="detail-text">{{ detailProduct.detail || '—' }}</dd></div>
+            </dl>
+            <footer class="admin-footer">
+              <span></span>
+              <div>
+                <button class="text-button" type="button" @click="closeEditor">关闭</button>
+              </div>
+            </footer>
+          </template>
 
-          <section v-if="editorMode === 'edit'" class="audit-section">
-            <header class="audit-head">
-              <h3>关联审核记录（{{ audit.length }}）</h3>
-              <span class="audit-hint">这条产品由哪些 mention 来、怎么处理的</span>
-            </header>
-            <p v-if="auditLoading" class="audit-empty"><LoaderCircle class="spin" :size="16" />读取中…</p>
-            <p v-else-if="!audit.length" class="audit-empty">没有关联的审核记录（手工录入或来源已清理）。</p>
-            <ul v-else class="audit-list">
-              <li v-for="item in audit" :key="item.id">
-                <span class="audit-date">{{ item.event_date }}</span>
-                <span class="audit-state">{{ STATE_LABELS[item.state] || item.state }}</span>
-                <span class="audit-brand">{{ item.brand || '未知厂商' }}</span>
-                <span class="audit-product">{{ item.product }}</span>
-                <a v-if="reviewLink(item)" class="audit-link" :href="reviewLink(item)" target="_blank" rel="noopener">▶ 原视频</a>
-              </li>
-            </ul>
-          </section>
-
-          <footer class="admin-footer">
-            <button v-if="editorMode === 'edit'" class="text-button danger-text" type="button" :disabled="busy" @click="removeProduct"><Trash2 :size="16" />删除产品</button>
-            <span v-else></span>
-            <div>
-              <button class="text-button" type="button" @click="closeEditor">取消</button>
-              <button class="primary-button" type="button" :disabled="busy" @click="saveProduct"><Save :size="16" />{{ editorMode === 'create' ? '创建产品' : '保存产品' }}</button>
+          <template v-else>
+            <div class="admin-form">
+              <label><span>厂商 <b>*</b></span>
+                <ManufacturerPicker
+                  v-model="form.manufacturer_id"
+                  :manufacturers="manufacturers"
+                  @change="onManufacturerChange"
+                />
+              </label>
+              <label><span>产品编号</span><input v-model="form.product_code" placeholder="RG32 / MDH-12E" /></label>
+              <label class="full"><span>产品名称 <b>*</b></span><input v-model="form.kit_name" /></label>
+              <label><span>系列</span>
+                <select v-model="form.product_line_id">
+                  <option value="">未知</option>
+                  <option v-for="line in lines" :key="line.id" :value="line.id">{{ line.name }}</option>
+                </select>
+              </label>
+              <label><span>价格</span><input v-model="form.price" placeholder="自由文本：78 / 68元 / 22000日元" /></label>
+              <label class="full"><span>资料来源 <b>*</b></span><input v-model="form.source" /></label>
+              <label class="full"><span>详情</span><textarea v-model="form.detail" rows="3"></textarea></label>
             </div>
-          </footer>
+
+            <section v-if="editorMode === 'edit'" class="audit-section">
+              <header class="audit-head">
+                <h3>关联审核记录（{{ audit.length }}）</h3>
+                <span class="audit-hint">这条产品由哪些 mention 来、怎么处理的</span>
+              </header>
+              <p v-if="auditLoading" class="audit-empty"><LoaderCircle class="spin" :size="16" />读取中…</p>
+              <p v-else-if="!audit.length" class="audit-empty">没有关联的审核记录（手工录入或来源已清理）。</p>
+              <ul v-else class="audit-list">
+                <li v-for="item in audit" :key="item.id">
+                  <span class="audit-date">{{ item.event_date }}</span>
+                  <span class="audit-state">{{ STATE_LABELS[item.state] || item.state }}</span>
+                  <span class="audit-brand">{{ item.brand || '未知厂商' }}</span>
+                  <span class="audit-product">{{ item.product }}</span>
+                  <a v-if="reviewLink(item)" class="audit-link" :href="reviewLink(item)" target="_blank" rel="noopener">▶ 原视频</a>
+                </li>
+              </ul>
+            </section>
+
+            <footer class="admin-footer">
+              <button v-if="editorMode === 'edit'" class="text-button danger-text" type="button" :disabled="busy" @click="removeProduct"><Trash2 :size="16" />删除产品</button>
+              <span v-else></span>
+              <div>
+                <button class="text-button" type="button" @click="closeEditor">取消</button>
+                <button class="primary-button" type="button" :disabled="busy" @click="saveProduct"><Save :size="16" />{{ editorMode === 'create' ? '创建产品' : '保存产品' }}</button>
+              </div>
+            </footer>
+          </template>
         </section>
       </div>
     </Transition>
@@ -399,6 +432,13 @@ loadProducts()
 .admin-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .admin-dialog h2 { margin: 4px 0 0; color: #1b2925; font-size: 20px; }
 .admin-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 18px 0; overflow: hidden; background: #e7ece8; border: 1px solid #e0e7e2; border-radius: 7px; }
+.detail-grid > div { min-width: 0; padding: 11px 13px; background: #fff; }
+.detail-grid > div.full { grid-column: 1 / -1; }
+.detail-grid dt { margin: 0 0 4px; color: #87938f; font-size: 11px; }
+.detail-grid dd { margin: 0; color: #22302b; font-size: 13px; }
+.detail-grid dd.detail-text { white-space: pre-wrap; word-break: break-word; line-height: 1.65; }
+.detail-hint { margin: 14px 0 -4px; color: #87938f; font-size: 12px; }
 .admin-form label { display: grid; gap: 5px; color: #5d6d67; font-size: 12px; }
 .admin-form label.full { grid-column: 1 / -1; }
 .admin-form label b { color: #bb563b; }

@@ -59,6 +59,8 @@ product_id, state, skip_reason, created_at, reviewed_at
 
 - **新增**：手工录入（来源默认“手动录入”）；必须选厂商，系列可空；走
   `(manufacturer_id, kit_name)` 精确查重
+- **查看/编辑**：点击表格行打开只读详情；只有行右侧的铅笔进入编辑。弹窗不响应背景点击，
+  框选文字时鼠标划出弹窗不会误关，只能点 X / 取消 / 关闭
 - **编辑**：只改 `products` 的字段；改名/换厂商时同样查重（排除自己）；换厂商时系列自动重置，避免跨厂家错绑
 - **删除**：同一事务内把关联的 `review_items` 退回 `pending` 并清空 `product_id`，
   再删除产品；收藏集里的目标通过 `collection_items.product_id` 的 `ON DELETE CASCADE` 一起删除；

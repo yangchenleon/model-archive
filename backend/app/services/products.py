@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import func, select, update as sa_update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -105,7 +105,7 @@ def create_many(session: Session, payloads: list[ProductCreate]) -> list[Product
     return products
 
 
-def update(session: Session, product_id: UUID, payload: ProductUpdate) -> Product:
+def update_product(session: Session, product_id: UUID, payload: ProductUpdate) -> Product:
     product = require(session, product_id)
     data = payload.model_dump(exclude_unset=True)
 
@@ -163,7 +163,7 @@ def delete(session: Session, product_id: UUID) -> dict[str, str | int]:
     ) or 0
     if linked:
         session.execute(
-            sa_update(ReviewItem)
+            update(ReviewItem)
             .where(ReviewItem.product_id == product_id)
             .values(
                 state="pending",

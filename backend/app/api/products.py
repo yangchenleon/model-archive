@@ -73,7 +73,7 @@ def get_product(product_id: UUID, session: Session = Depends(get_session)) -> Pr
 
 @router.patch("/products/{product_id}", response_model=ProductRead)
 def update_product(product_id: UUID, payload: ProductUpdate, session: Session = Depends(get_session)) -> Product:
-    return service.update(session, product_id, payload)
+    return service.update_product(session, product_id, payload)
 
 
 @router.delete("/products/{product_id}")
