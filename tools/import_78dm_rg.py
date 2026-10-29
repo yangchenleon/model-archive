@@ -40,6 +40,12 @@ WORK_BY_CATEGORY = {
     "机动警察系列": "机动警察",
 }
 
+# 78dm's table leaves the code empty for a few normal-version pages even though
+# the card/page sequence has a number. Keep only explicit, reviewed overrides.
+CODE_OVERRIDES = {
+    "446468": "44",  # 陆战型高达: the last of the 44 normal-version entries
+}
+
 
 def clean_name(value: str) -> str:
     return re.sub(r"^\s*\d+\s+", "", value or "").strip()
@@ -51,6 +57,16 @@ def normalize_code(value: str | None) -> str | None:
     if re.fullmatch(r"RG\d+", value, flags=re.I):
         return value[2:]
     return value
+
+
+def code_for(product: dict) -> str | None:
+    code = normalize_code(product.get("code"))
+    if code:
+        return code
+    prefix = re.match(r"^\s*(\d+)\s+", product.get("name", ""))
+    if prefix:
+        return prefix.group(1).zfill(2)
+    return CODE_OVERRIDES.get(str(product.get("id")))
 
 
 def parse_release_date(value: str) -> date | None:
@@ -115,7 +131,7 @@ def main() -> None:
             "id": uuid4(),
             "manufacturer_id": None,
             "product_line_id": None,
-            "product_code": normalize_code(product.get("code")),
+            "product_code": code_for(product),
             "kit_name": kit_name,
             "work": WORK_BY_CATEGORY.get(product.get("source_category", "")),
             "release_channel": product.get("channel"),

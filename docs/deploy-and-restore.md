@@ -100,7 +100,7 @@ Windows PowerShell：
 ```powershell
 Get-FileHash .\backups\model-archive-20261028.dump -Algorithm SHA256
 Get-Content .\backups\model-archive-20261028.dump.sha256
-# 两个哈希应一致：bb06ff79c3a1f9b546c023b5c514ab71aa26020dcbb697d66f85f2ea6c62d781
+# 两个哈希应一致：61f82fcbbbbb616c82274a61b8b72e583aa014440ea3b79be6eee2f19f193bbb
 ```
 
 > dump 是 custom format（`pg_dump -Fc`），不是纯 SQL 文本；用 `pg_restore` 导入，不要直接 `psql < file`。
