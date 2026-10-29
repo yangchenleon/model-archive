@@ -16,7 +16,7 @@
 
 ```text
 id, manufacturer_id, product_line_id(可空), work(可空), release_channel(可空),
-product_code, kit_name, detail, source, price(自由文本), created_at
+release_date(可空), product_code, kit_name, detail, source, price(自由文本), created_at
 ```
 
 `review_items`
@@ -36,13 +36,14 @@ product_id, state, skip_reason, created_at, reviewed_at
 - 产品身份是 `(manufacturer_id, product_line_id, kit_name)`；系列参与身份，同厂商同名但不同系列算不同产品；未知系列是独立一档
 - 渠道是产品属性：`regular / pb / limited / event / other`，空 = 未知；不参与产品身份
 - `work` 是作品/IP（EVA、勇者王、机动警察、SEED…），可空，不参与产品身份；它与 line、渠道互相正交
+- `release_date` 是首次发售日期；再版/延期说明留在 `detail`，不参与身份
 
 ## 3. 审核页
 
 侧栏「入库审核」，一次一条，默认按 **厂商 → 产品 → 时间** 排序（可切时间/产品）。
 
 - 左卡片：日期、厂商·产品、原视频内嵌播放（跳到 mention 秒数）、原文引句、
-  抽取阶段/价格/系列；可改厂商（可搜索）、产品编号、产品名、系列、作品、渠道、价格
+  抽取阶段/价格/系列；可改厂商（可搜索）、产品编号、产品名、系列、作品、渠道、发售时间、价格
 - 厂商选择器按名称搜索；匹配不到时提示去「厂家管理」新建，刷新页面后再匹配。
   **不在审核页自动建厂**。系列下拉只列当前厂家的系列，留空 = 未知
 - 右侧：搜索现有产品（只读参考），选中后可「映射」

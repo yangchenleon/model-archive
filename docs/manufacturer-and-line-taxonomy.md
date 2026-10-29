@@ -42,6 +42,9 @@
    - `products.work` 可空，例如 `EVANGELION`、`勇者王`、`机动警察`、`SEED`。
    - 同一个 `RG` line 下可以有多个作品；不能把 EVA 拆成 `RG EVA` 新 line。
    - 不参与产品身份查重。
+8. **发售时间**
+   - `products.release_date` 只存首次发售日期；再版/延期原文留在 `detail`。
+   - 产品列表默认按编号，没编号再按发售时间；也可切换排序。
 
 ## 二、当前数据（迁移后）
 
@@ -100,7 +103,8 @@ products (
     manufacturer_id uuid not null references manufacturers(id) on delete restrict,
     product_line_id uuid references product_lines(id) on delete set null,
     work varchar(120),           -- 作品/IP，例如 EVANGELION；可空
-    release_channel varchar(16)  -- regular/pb/limited/event/other；可空
+    release_channel varchar(16), -- regular/pb/limited/event/other；可空
+    release_date date             -- 首次发售日期；可空
 )
 
 review_items (

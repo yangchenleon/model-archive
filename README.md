@@ -36,7 +36,7 @@ npm run dev
 | --- | --- |
 | `manufacturers` | Canonical maker: name, category (`gundam / guomo / ko`, null = unclassified), tier (1–3, larger sorts later), hidden `sort_order`, description. No alias table: a wrong name is data to fix. |
 | `product_lines` | Flat series owned by one manufacturer; `(manufacturer_id, name)` unique. HG, HGUC and HG GTO are separate series. Deleting one sets its products to NULL (shown as 未知); no hierarchy. |
-| `products` | The product catalog: `manufacturer_id` (required), `product_line_id` (nullable), `work` (optional IP/work, e.g. EVANGELION), `release_channel` (regular / pb / limited / event / other, NULL = unknown), code, name, detail, source, free-text `price`, `created_at`. Identity is `(manufacturer_id, product_line_id, kit_name)` at the service layer; the same name in a different series is a different product, and a NULL line is its own bucket. Work and channel are metadata, not identity. |
+| `products` | The product catalog: `manufacturer_id` (required), `product_line_id` (nullable), `work` (optional IP/work, e.g. EVANGELION), `release_channel` (regular / pb / limited / event / other, NULL = unknown), `release_date` (first release date; reprint notes live in `detail`), code, name, detail, source, free-text `price`, `created_at` (internal audit only). Identity is `(manufacturer_id, product_line_id, kit_name)` at the service layer; the same name in a different series is a different product, and a NULL line is its own bucket. Work, channel and release date are metadata, not identity. |
 | `review_items` | Persistent ingestion audit queue from `outputs/products/products.json`: source video/second/evidence plus `pending / mapped / created / skipped`. Raw `brand` / `line` are kept, plus optional matched manufacturer/line IDs. Mapping only links the mention to a product; it never edits the product. |
 | `assets` | One row per owned kit: `code` (`K7M2Q`, five random Crockford Base32 chars), `state` (pending / keep / displayed / stored / sold), purchase / build / sale facts and the review. |
 | `tags` | One physical sticker per bag (`R4TB9`). Every sticker has its own random code, never reused. Selling an asset sets `retired_at`: the sticker leaves the print queues and cannot be reprinted, but the row stays as history. |
@@ -66,7 +66,9 @@ curl -X POST http://localhost:18000/api/v1/products/bulk \
 
 `product_line_id` is optional; omit it or send `null` for 未知. A line must
 belong to the chosen manufacturer. `work` is optional free text for the IP
-(e.g. `EVANGELION`); it is metadata, not part of product identity.
+(e.g. `EVANGELION`); `release_date` is an optional ISO date (`YYYY-MM-DD`) and
+only the first release date is stored, with reprint notes kept in `detail`.
+Both are metadata, not part of product identity.
 `release_channel` is optional too:
 `regular` / `pb` / `limited` / `event` / `other`; omit or send `null` for 未知.
 It is metadata for filtering, not part of duplicate detection.

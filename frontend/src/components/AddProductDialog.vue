@@ -19,6 +19,7 @@ const form = reactive({
   product_line_id: '',
   work: '',
   release_channel: '',
+  release_date: '',
   detail: '',
   source: '手动录入',
 })
@@ -92,6 +93,7 @@ async function submit() {
         product_line_id: form.product_line_id || null,
         work: valueOrNull(form.work),
         release_channel: form.release_channel || null,
+        release_date: form.release_date || null,
         source: form.source.trim(),
         product_code: valueOrNull(form.product_code),
         detail: valueOrNull(form.detail),
@@ -100,7 +102,7 @@ async function submit() {
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.detail || '保存失败')
     Object.assign(form, {
-      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', detail: '', source: '手动录入',
+      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', release_date: '', detail: '', source: '手动录入',
     })
     lines.value = []
     emit('created', body)
@@ -144,6 +146,7 @@ async function submit() {
               <option v-for="channel in CHANNEL_OPTIONS" :key="channel.value" :value="channel.value">{{ channel.label }}</option>
             </select>
           </label>
+          <label class="form-field"><span>发售时间</span><input v-model="form.release_date" type="date" /></label>
           <label class="form-field"><span>资料来源 <b>*</b></span><input v-model="form.source" required placeholder="手动录入" /></label>
           <label class="form-field full"><span>详情</span><textarea v-model="form.detail" rows="3" placeholder="可留空，后续完善即可"></textarea></label>
         </div>

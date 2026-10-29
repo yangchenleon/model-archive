@@ -27,7 +27,7 @@ const showSkipped = ref(false)
 
 const manufacturers = ref([])
 const lines = ref([])
-const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', work: '', release_channel: '', price_text: '' })
+const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', work: '', release_channel: '', release_date: '', price_text: '' })
 const search = ref('')
 const candidates = ref([])
 const selected = ref(null)
@@ -98,6 +98,7 @@ async function prepare(next) {
   form.product_line_id = ''
   form.work = ''
   form.release_channel = ''
+  form.release_date = ''
   form.price_text = next.price_raw || ''
   selected.value = null
   search.value = next.product || ''
@@ -207,6 +208,7 @@ async function createProduct() {
         kit_name: form.kit_name.trim(),
         work: form.work.trim() || null,
         release_channel: form.release_channel || null,
+        release_date: form.release_date || null,
         product_code: form.product_code.trim() || null,
         detail: item.value.detail,
         price_text: form.price_text.trim() || null,
@@ -357,6 +359,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
               <option v-for="channel in CHANNEL_OPTIONS" :key="channel.value" :value="channel.value">{{ channel.label }}</option>
             </select>
           </label>
+          <label><span>发售时间</span><input v-model="form.release_date" type="date" /></label>
           <label><span>价格</span><input v-model="form.price_text" placeholder="78 / 68元 / 22000日元" /></label>
         </div>
         <p v-if="!form.manufacturer_id" class="manufacturer-warning">没有匹配到厂商：去「厂家管理」新建，刷新页面后再匹配。</p>

@@ -24,6 +24,8 @@
 | `product_line_id` | → `product_lines`，可空；空 = 未知。系列不参与身份。 |
 | `work` | 可空作品/IP，例如 `EVANGELION`、`勇者王`、`机动警察`、`SEED`；不是 line，不参与查重。 |
 | `release_channel` | 发售渠道：`regular / pb / limited / event / other`，空 = 未知。只是过滤属性，不参与查重。 |
+| `release_date` | 首次发售日期；再版信息保留在 `detail`。只用于展示/排序，不参与查重。 |
+| `created_at` | 内部入库审计时间，不在产品 UI/CSV 中展示。 |
 | `product_code` | 自由文本，可空；厂商给产品的市场编号。 |
 | `kit_name` | 产品识别信息，模型名称必填；版本/配色以括号并入名称。 |
 | `price` | 当前价格，自由文本（`78`、`68元`、`22000日元`、`299-398`），不拆数值/币种。 |

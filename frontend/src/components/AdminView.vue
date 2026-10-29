@@ -14,7 +14,7 @@ const SORT_FIELDS = [
   { key: 'work', label: '作品' },
   { key: 'release_channel', label: '渠道' },
   { key: 'price', label: '价格' },
-  { key: 'created_at', label: '入库时间' },
+  { key: 'release_date', label: '发售时间' },
 ]
 const STATE_LABELS = { pending: '待审', mapped: '已映射', created: '已新建', skipped: '已跳过' }
 
@@ -28,7 +28,7 @@ const busy = ref(false)
 const message = ref('')
 const messageError = ref(false)
 
-const sortKey = ref('manufacturer')
+const sortKey = ref('product_code')
 const sortDirection = ref('asc')
 const selectedIds = ref(new Set())
 const bulkChannel = ref('')
@@ -41,7 +41,7 @@ const detailProduct = ref(null)
 const audit = ref([])
 const auditLoading = ref(false)
 const form = reactive({
-  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', price: '', source: '', detail: '',
+  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', release_date: '', price: '', source: '', detail: '',
 })
 
 const filtered = computed(() => {
@@ -170,7 +170,7 @@ async function applyBulkChannel() {
 
 function resetForm() {
   Object.assign(form, {
-    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '',
+    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', release_date: '',
     price: '', source: '手动录入', detail: '',
   })
   lines.value = []
@@ -202,6 +202,7 @@ async function openEdit(product) {
     product_line_id: product.product_line_id || '',
     work: product.work || '',
     release_channel: product.release_channel || '',
+    release_date: product.release_date || '',
     price: product.price || '',
     source: product.source || '',
     detail: product.detail || '',
@@ -237,6 +238,7 @@ function payload() {
     product_line_id: form.product_line_id || null,
     work: nullIfEmpty(form.work),
     release_channel: form.release_channel || null,
+    release_date: form.release_date || null,
     price: nullIfEmpty(form.price),
     source: form.source.trim(),
     detail: nullIfEmpty(form.detail),
@@ -296,13 +298,13 @@ async function removeProduct() {
 }
 
 function exportCsv() {
-  const headers = ['厂商', '产品编号', '系列', '作品', '渠道', '模型名称', '价格', '资料来源', '详情', '入库时间', 'id']
+  const headers = ['厂商', '产品编号', '系列', '作品', '渠道', '模型名称', '价格', '发售时间', '资料来源', '详情', 'id']
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const lines = [headers.join(',')]
   for (const product of filtered.value) {
     lines.push([
       product.manufacturer, product.product_code, product.product_line, product.work, channelLabel(product.release_channel), product.kit_name,
-      product.price, product.source, product.detail, product.created_at, product.id,
+      product.price, product.release_date, product.source, product.detail, product.id,
     ].map(escape).join(','))
   }
   const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -383,7 +385,7 @@ loadProducts()
             <td>{{ product.work || '—' }}</td>
             <td>{{ channelLabel(product.release_channel) }}</td>
             <td class="price">{{ product.price || '—' }}</td>
-            <td class="date">{{ (product.created_at || '').slice(0, 10) }}</td>
+            <td class="date">{{ product.release_date || '—' }}</td>
             <td class="row-actions"><button class="icon-button" type="button" aria-label="编辑" @click.stop="openEdit(product)"><Pencil :size="15" /></button></td>
           </tr>
         </tbody>
@@ -412,7 +414,7 @@ loadProducts()
               <div><dt>作品</dt><dd>{{ detailProduct.work || '—' }}</dd></div>
               <div><dt>渠道</dt><dd>{{ channelLabel(detailProduct.release_channel) }}</dd></div>
               <div><dt>价格</dt><dd>{{ detailProduct.price || '—' }}</dd></div>
-              <div><dt>入库时间</dt><dd>{{ (detailProduct.created_at || '').slice(0, 10) }}</dd></div>
+              <div><dt>发售时间</dt><dd>{{ detailProduct.release_date || '—' }}</dd></div>
               <div class="full"><dt>资料来源</dt><dd class="detail-text">{{ detailProduct.source || '—' }}</dd></div>
               <div class="full"><dt>详情</dt><dd class="detail-text">{{ detailProduct.detail || '—' }}</dd></div>
             </dl>
@@ -448,6 +450,7 @@ loadProducts()
                   <option v-for="channel in CHANNEL_OPTIONS" :key="channel.value" :value="channel.value">{{ channel.label }}</option>
                 </select>
               </label>
+              <label><span>发售时间</span><input v-model="form.release_date" type="date" /></label>
               <label><span>价格</span><input v-model="form.price" placeholder="自由文本：78 / 68元 / 22000日元" /></label>
               <label class="full"><span>资料来源 <b>*</b></span><input v-model="form.source" /></label>
               <label class="full"><span>详情</span><textarea v-model="form.detail" rows="3"></textarea></label>

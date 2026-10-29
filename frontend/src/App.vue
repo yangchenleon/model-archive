@@ -79,6 +79,7 @@ const toastError = ref(false)
 const makerSearch = ref('')
 const makerSort = ref('taxonomy')
 const categoryFilter = ref('')
+const productSort = ref('code')
 
 function makerName(product) {
   return product.manufacturer || '未标注厂商'
@@ -310,38 +311,40 @@ const filteredProducts = computed(() => {
     })
     .slice()
     .sort((a, b) => {
-      // 1. 按照厂商排序
-      const makerA = a.manufacturer || ''
-      const makerB = b.manufacturer || ''
-      if (makerA !== makerB) {
-        if (!makerA) return 1
-        if (!makerB) return -1
-        const makerDiff = makerA.localeCompare(makerB, 'zh-CN')
-        if (makerDiff !== 0) return makerDiff
+      const codeA = (a.product_code || '').trim()
+      const codeB = (b.product_code || '').trim()
+      const numA = /^\d+$/.test(codeA) ? Number(codeA) : null
+      const numB = /^\d+$/.test(codeB) ? Number(codeB) : null
+      const dateA = a.release_date || ''
+      const dateB = b.release_date || ''
+      const dateCompare = () => {
+        if (!dateA && !dateB) return 0
+        if (!dateA) return 1
+        if (!dateB) return -1
+        return dateA.localeCompare(dateB)
       }
 
-      // 2. 按照系列排序
-      const lineA = a.product_line || ''
-      const lineB = b.product_line || ''
-      if (lineA !== lineB) {
-        if (!lineA) return 1
-        if (!lineB) return -1
-        const lineDiff = lineA.localeCompare(lineB, 'zh-CN')
-        if (lineDiff !== 0) return lineDiff
+      if (productSort.value === 'name') {
+        return (a.kit_name || '').localeCompare(b.kit_name || '', 'zh-CN')
+      }
+      if (productSort.value === 'release_date') {
+        return dateCompare()
+          || (codeA || '').localeCompare(codeB || '', undefined, { numeric: true, sensitivity: 'base' })
+          || (a.kit_name || '').localeCompare(b.kit_name || '', 'zh-CN')
       }
 
-      // 3. 按照编号自然数字排序
-      const codeA = a.product_code || ''
-      const codeB = b.product_code || ''
-      if (codeA !== codeB) {
-        if (!codeA) return 1
-        if (!codeB) return -1
+      // 编号优先；编号相同再按发售时间；没有编号的产品按发售时间
+      if (numA !== null && numB !== null) {
+        if (numA !== numB) return numA - numB
+      } else if (codeA && codeB) {
         const codeDiff = codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' })
-        if (codeDiff !== 0) return codeDiff
+        if (codeDiff) return codeDiff
+      } else if (codeA) {
+        return -1
+      } else if (codeB) {
+        return 1
       }
-
-      // 4. 名称排序兜底
-      return (a.kit_name || '').localeCompare(b.kit_name || '', 'zh-CN')
+      return dateCompare() || (a.kit_name || '').localeCompare(b.kit_name || '', 'zh-CN')
     })
 })
 
@@ -516,6 +519,7 @@ onMounted(() => {
             <label class="search-field"><Search :size="18" /><input v-model="search" type="search" :placeholder="selectedMaker ? '搜索当前厂牌的产品' : '搜索产品名、厂商或系列'" /></label>
             <label class="select-field"><Filter :size="16" /><select v-model="channelFilter"><option value="">所有渠道</option><option v-for="channel in productChannels" :key="channel.value" :value="channel.value">{{ channel.label }} {{ channel.count }}</option></select></label>
             <label class="select-field"><Filter :size="16" /><select v-model="workFilter"><option value="">所有作品</option><option v-for="work in productWorks" :key="work.value" :value="work.value">{{ work.label }} {{ work.count }}</option></select></label>
+            <label class="select-field"><Filter :size="16" /><select v-model="productSort"><option value="code">按编号</option><option value="release_date">按发售时间</option><option value="name">按名称</option></select></label>
             <template v-if="!selectedMaker">
               <label class="select-field"><Building2 :size="16" /><select v-model="makerFilter"><option value="">所有厂商</option><option v-for="maker in makers" :key="maker" :value="maker">{{ maker }}</option></select></label>
               <label class="select-field"><Filter :size="16" /><select v-model="lineFilter"><option value="">所有系列</option><option v-for="line in productLines" :key="line" :value="line">{{ line }}</option></select></label>

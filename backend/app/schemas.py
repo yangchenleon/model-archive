@@ -72,6 +72,7 @@ class ProductCreate(BaseModel):
     kit_name: str
     work: str | None = None
     release_channel: str | None = None
+    release_date: date | None = None
     detail: str | None = None
     source: str
     price: str | None = None
@@ -84,6 +85,7 @@ class ProductUpdate(BaseModel):
     kit_name: str | None = None
     work: str | None = None
     release_channel: str | None = None
+    release_date: date | None = None
     detail: str | None = None
     source: str | None = None
     price: str | None = None
@@ -105,6 +107,7 @@ class ProductRead(BaseModel):
     kit_name: str
     work: str | None = None
     release_channel: str | None = None
+    release_date: date | None = None
     detail: str | None = None
     source: str
     price: str | None = None
@@ -246,6 +249,7 @@ class ReviewCreateRequest(BaseModel):
     kit_name: str
     work: str | None = None
     release_channel: str | None = None
+    release_date: date | None = None
     product_code: str | None = None
     detail: str | None = None
     price_text: str | None = None
@@ -261,6 +265,7 @@ class ProductBrief(BaseModel):
     product_line: str | None = None
     work: str | None = None
     release_channel: str | None = None
+    release_date: date | None = None
 
 
 class TagRead(BaseModel):

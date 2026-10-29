@@ -18,6 +18,7 @@ import os
 import re
 import sys
 from collections import Counter
+from datetime import date
 from pathlib import Path
 from uuid import uuid4
 
@@ -42,6 +43,32 @@ WORK_BY_CATEGORY = {
 
 def clean_name(value: str) -> str:
     return re.sub(r"^\s*\d+\s+", "", value or "").strip()
+
+
+def normalize_code(value: str | None) -> str | None:
+    if not value:
+        return None
+    if re.fullmatch(r"RG\d+", value, flags=re.I):
+        return value[2:]
+    return value
+
+
+def parse_release_date(value: str) -> date | None:
+    match = re.search(r"(\d{4})年\s*(\d{1,2})月(?:\s*(\d{1,2})日)?", value or "")
+    if match:
+        year, month = int(match.group(1)), int(match.group(2))
+        day = int(match.group(3) or 1)
+        try:
+            return date(year, month, day)
+        except ValueError:
+            return None
+    match = re.search(r"(\d{4})年", value or "")
+    if match:
+        try:
+            return date(int(match.group(1)), 1, 1)
+        except ValueError:
+            return None
+    return None
 
 
 def build_detail(product: dict, image_file: str) -> str:
@@ -88,10 +115,11 @@ def main() -> None:
             "id": uuid4(),
             "manufacturer_id": None,
             "product_line_id": None,
-            "product_code": product.get("code") or None,
+            "product_code": normalize_code(product.get("code")),
             "kit_name": kit_name,
             "work": WORK_BY_CATEGORY.get(product.get("source_category", "")),
             "release_channel": product.get("channel"),
+            "release_date": parse_release_date(product.get("release_date", "")),
             "detail": build_detail(product, product.get("image_file", "")),
             "source": product.get("url", ""),
             "price": product.get("price") or None,

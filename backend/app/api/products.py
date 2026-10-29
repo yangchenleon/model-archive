@@ -42,9 +42,8 @@ def list_products(
         .join(Manufacturer, Product.manufacturer_id == Manufacturer.id)
         .outerjoin(ProductLine, Product.product_line_id == ProductLine.id)
         .order_by(
-            Manufacturer.name.nulls_last(),
-            ProductLine.name.nulls_last(),
             Product.product_code.nulls_last(),
+            Product.release_date.nulls_last(),
             Product.kit_name,
         )
         .limit(limit)

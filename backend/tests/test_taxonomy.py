@@ -347,6 +347,26 @@ def test_bulk_channel_update(client):
     ).status_code == 422
 
 
+def test_product_code_normalizes_rg_prefix_and_release_date_is_kept(client):
+    maker = make_manufacturer(client, "编号厂")
+    product = make_product(
+        client,
+        maker["id"],
+        "编号机体",
+        product_code="RG01",
+        release_date="2010-07-24",
+    )
+    assert product["product_code"] == "01"
+    assert product["release_date"] == "2010-07-24"
+
+    updated = client.patch(
+        f"/api/v1/products/{product['id']}",
+        json={"product_code": "RG02"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["product_code"] == "02"
+
+
 def test_work_is_optional_metadata_and_filterable(client):
     maker = make_manufacturer(client, "作品厂")
     product = make_product(client, maker["id"], "EVA 初号机", work="TEST-WORK")
