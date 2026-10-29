@@ -239,6 +239,41 @@ def test_delete_product_resets_linked_review_match(client, product, db):
     assert item.product_line_id is None
 
 
+def test_same_name_in_different_series_is_a_different_product(client):
+    maker = make_manufacturer(client, "多系列厂")
+    first_line = make_line(client, maker["id"], "HG")
+    second_line = make_line(client, maker["id"], "RG")
+
+    first = make_product(client, maker["id"], "同名不同线机体", first_line["id"])
+    second = make_product(client, maker["id"], "同名不同线机体", second_line["id"])
+    assert first["id"] != second["id"]
+
+    duplicate = client.post(
+        "/api/v1/products",
+        json={
+            "kit_name": "同名不同线机体",
+            "manufacturer_id": maker["id"],
+            "product_line_id": first_line["id"],
+            "source": "pytest",
+        },
+    )
+    assert duplicate.status_code == 409
+
+    moved = client.patch(
+        f"/api/v1/products/{second['id']}",
+        json={"product_line_id": first_line["id"]},
+    )
+    assert moved.status_code == 409
+
+
+def test_same_name_unknown_line_is_its_own_bucket(client):
+    maker = make_manufacturer(client, "未知线厂")
+    line = make_line(client, maker["id"], "HG")
+    named = make_product(client, maker["id"], "未知线同名机体", line["id"])
+    unknown = make_product(client, maker["id"], "未知线同名机体")
+    assert named["id"] != unknown["id"]
+
+
 def test_manufacturer_deletion_is_blocked_while_products_exist(client):
     maker = make_manufacturer(client, "有产品厂")
     make_product(client, maker["id"], "产品一")

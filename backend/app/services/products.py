@@ -34,12 +34,23 @@ def require_line(session: Session, line_id: UUID, manufacturer_id: UUID) -> Prod
 def find_duplicate(
     session: Session,
     manufacturer_id: UUID,
+    product_line_id: UUID | None,
     kit_name: str,
     exclude_id: UUID | None = None,
 ) -> Product | None:
-    """Identity is (manufacturer_id, kit_name)."""
+    """Identity is (manufacturer_id, product_line_id, kit_name).
+
+    A NULL line is its own bucket: an unknown-line product only matches another
+    unknown-line product, not a product in a named line.
+    """
+    line_match = (
+        Product.product_line_id.is_(None)
+        if product_line_id is None
+        else Product.product_line_id == product_line_id
+    )
     statement = select(Product).where(
         Product.manufacturer_id == manufacturer_id,
+        line_match,
         Product.kit_name == kit_name,
     )
     if exclude_id is not None:
@@ -65,8 +76,10 @@ def create(session: Session, payload: ProductCreate) -> Product:
         raise Invalid("产品名称不能为空")
     _require_manufacturer(session, payload.manufacturer_id)
     _validate_line(session, payload.manufacturer_id, payload.product_line_id)
-    if find_duplicate(session, payload.manufacturer_id, kit_name) is not None:
-        raise Conflict("已存在同名同厂商产品")
+    if find_duplicate(
+        session, payload.manufacturer_id, payload.product_line_id, kit_name
+    ) is not None:
+        raise Conflict("已存在同厂商同系列下的同名产品")
     product = Product(**{**payload.model_dump(), "kit_name": kit_name})
     session.add(product)
     session.commit()
@@ -81,7 +94,7 @@ def create_many(session: Session, payloads: list[ProductCreate]) -> list[Product
     if len(payloads) > BULK_LIMIT:
         raise Invalid(f"单次最多 {BULK_LIMIT} 条")
 
-    seen: set[tuple[UUID, str]] = set()
+    seen: set[tuple[UUID, UUID | None, str]] = set()
     products: list[Product] = []
     for index, item in enumerate(payloads, start=1):
         kit_name = item.kit_name.strip()
@@ -89,11 +102,13 @@ def create_many(session: Session, payloads: list[ProductCreate]) -> list[Product
             raise Invalid(f"第 {index} 条产品名称为空")
         _require_manufacturer(session, item.manufacturer_id)
         _validate_line(session, item.manufacturer_id, item.product_line_id)
-        key = (item.manufacturer_id, kit_name)
+        key = (item.manufacturer_id, item.product_line_id, kit_name)
         if key in seen:
             raise Conflict(f"第 {index} 条与本次提交内的产品重复：{kit_name}")
-        if find_duplicate(session, item.manufacturer_id, kit_name) is not None:
-            raise Conflict(f"第 {index} 条已存在同名同厂商产品：{kit_name}")
+        if find_duplicate(
+            session, item.manufacturer_id, item.product_line_id, kit_name
+        ) is not None:
+            raise Conflict(f"第 {index} 条已存在同厂商同系列同名产品：{kit_name}")
         seen.add(key)
         product = Product(**{**item.model_dump(), "kit_name": kit_name})
         session.add(product)
@@ -125,22 +140,25 @@ def update_product(session: Session, product_id: UUID, payload: ProductUpdate) -
         raise Invalid("厂商不能为空")
     _require_manufacturer(session, manufacturer_id)
 
+    target_line_id = data.get("product_line_id", product.product_line_id)
     if "product_line_id" in data:
         _validate_line(session, manufacturer_id, data["product_line_id"])
     elif manufacturer_id != product.manufacturer_id and product.product_line_id:
         # The old line belongs to the old manufacturer; a cross-maker line is invalid.
         line = session.get(ProductLine, product.product_line_id)
         if line is None or line.manufacturer_id != manufacturer_id:
+            target_line_id = None
             data["product_line_id"] = None
 
     duplicate = find_duplicate(
         session,
         manufacturer_id,
+        target_line_id,
         data.get("kit_name", product.kit_name),
         exclude_id=product.id,
     )
     if duplicate is not None:
-        raise Conflict("已存在同名同厂商产品")
+        raise Conflict("已存在同厂商同系列下的同名产品")
 
     for field, value in data.items():
         if isinstance(value, str):

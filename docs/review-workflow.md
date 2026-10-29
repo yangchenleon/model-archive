@@ -33,7 +33,7 @@ product_id, state, skip_reason, created_at, reviewed_at
 - `source_key` 唯一：重复导入同一批抽取结果不会产生重复队列项
 - `status_raw` 只是抽取原文，不参与产品表；产品没有状态
 - `brand` / `line` 保留抽取原文；`manufacturer_id` / `product_line_id` 是人工匹配结果
-- 产品身份是 `(manufacturer_id, kit_name)`；系列不参与身份
+- 产品身份是 `(manufacturer_id, product_line_id, kit_name)`；系列参与身份，同厂商同名但不同系列算不同产品；未知系列是独立一档
 
 ## 3. 审核页
 
@@ -49,8 +49,8 @@ product_id, state, skip_reason, created_at, reviewed_at
      同时记录产品的 `manufacturer_id/product_line_id`，**不改产品任何字段**
   2. **新建**：按表单字段插入一条 `products`，并把 mention 标记为 `created`
   3. **跳过**：记录 `skip_reason`，不碰产品表
-- 新建前会做一次精确查重：同一 `(manufacturer_id, kit_name)` 已存在时返回 409，
-  提示改用「映射」。名称/厂商的模糊写法（大小写、空格）不做自动归并；没有别名表
+- 新建前会做一次精确查重：同一 `(manufacturer_id, product_line_id, kit_name)` 已存在时返回 409，
+  提示改用「映射」。不同系列同名不算重复；名称/厂商的模糊写法（大小写、空格）不做自动归并；没有别名表
 - 快捷键：`Enter` 映射、`N` 新建、`S` 跳过
 
 ## 4. 后台管理
@@ -58,7 +58,7 @@ product_id, state, skip_reason, created_at, reviewed_at
 侧栏「后台管理」（`/#admin`）：新增、编辑、删除产品；侧栏「厂家管理」（`/#taxonomy`）维护厂家和系列。
 
 - **新增**：手工录入（来源默认“手动录入”）；必须选厂商，系列可空；走
-  `(manufacturer_id, kit_name)` 精确查重
+  `(manufacturer_id, product_line_id, kit_name)` 精确查重；同厂商同名但不同系列允许
 - **查看/编辑**：点击表格行打开只读详情；只有行右侧的铅笔进入编辑。弹窗不响应背景点击，
   框选文字时鼠标划出弹窗不会误关，只能点 X / 取消 / 关闭
 - **编辑**：只改 `products` 的字段；改名/换厂商时同样查重（排除自己）；换厂商时系列自动重置，避免跨厂家错绑
@@ -80,7 +80,7 @@ product_id, state, skip_reason, created_at, reviewed_at
 
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
-| POST | `/api/v1/products` | 手工新增产品（需 `manufacturer_id`；同名同厂商返回 409） |
+| POST | `/api/v1/products` | 手工新增产品（需 `manufacturer_id`；同厂商同系列同名返回 409） |
 | POST | `/api/v1/products/bulk` | 批量新增（全成全败，单次 ≤500 条） |
 | GET | `/api/v1/products/{id}/review-items` | 该产品关联的审核记录 |
 | GET | `/api/v1/manufacturers` | 厂家列表（`category` / `q` / `limit`） |
@@ -113,7 +113,7 @@ docker compose up -d api frontend
 项目**不再内置 CSV/Excel 导入器**。CSV、表格或爬虫数据由外部工具自行解析、校验成
 产品字段后，先查 `manufacturers` / `product_lines` 拿 ID，再调用
 `POST /api/v1/products`（单条）或 `POST /api/v1/products/bulk`（批量）写入；本项目只对字段做基础校验
-（名称/厂商必填、系列归属、同名同厂商查重）。**导入器不要自动建厂**，匹配不到就留给人工处理。
+（名称/厂商必填、系列归属、同厂商同系列同名查重）。**导入器不要自动建厂**，匹配不到就留给人工处理。
 
 ## 7. 未来缺口怎么接
 
@@ -129,6 +129,6 @@ docker compose up -d api frontend
 ## 8. 已知取舍
 
 1. 映射不会更新产品字段（价格/编号改不了），修正走后台管理
-2. 查重只做 `(manufacturer_id, kit_name)` 精确匹配；不同厂商同名照旧算不同产品；没有别名/模糊归并
+2. 查重只做 `(manufacturer_id, product_line_id, kit_name)` 精确匹配；不同厂商或不同系列同名算不同产品；没有别名/模糊归并
 3. 删产品会退回审核记录，但已经删除的 mention 不会回到队列
 4. 队列按 mention 组织，同一产品的多条 mention 仍会分别出现；重复内容靠跳过处理

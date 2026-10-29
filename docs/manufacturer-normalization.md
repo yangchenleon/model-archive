@@ -80,7 +80,7 @@ STAR     45
 | 同厂异写 | `manufacturer_aliases` 把 猛虎 / 猛虎模型 归到一个厂 |
 | 厂牌页信息太少 | 描述、国家、类型（官方/KO/原创/GK）、排序、以后加 logo |
 | 目录计数稳定 | 按 `manufacturer_id` 分组，不再怕改字/多空格 |
-| 产品身份 | 查重从 `(manufacturer 字符串, kit_name)` 变成 `(manufacturer_id, kit_name)` |
+| 产品身份 | 查重从 `(manufacturer 字符串, kit_name)` 变成 `(manufacturer_id, product_line_id, kit_name)` |
 | 审核入库 | 抽取的 `brand` 可以匹配到厂，避免每次新建一个错别字厂 |
 | 收藏集 | “XX 厂制霸”直接按 `manufacturer_id` 定义，不用字符串 |
 | 数据维护 | 后台可以改厂名、合并厂、加别名；产品跟着走 |
@@ -120,7 +120,7 @@ CREATE TABLE manufacturer_aliases (
 
 ALTER TABLE products
     ADD COLUMN manufacturer_id uuid REFERENCES manufacturers(id) ON DELETE RESTRICT;
--- 回填后 SET NOT NULL；产品身份改为 (manufacturer_id, kit_name)
+-- 回填后 SET NOT NULL；产品身份改为 (manufacturer_id, product_line_id, kit_name)
 ```
 
 - `products.manufacturer` 字符串**最终删掉**，只保留外键；API 读的时候 join 出 `manufacturer.name`。
@@ -164,7 +164,7 @@ ALTER TABLE products
 
 ### 第 3 步：切换产品身份与接口
 
-1. `(manufacturer_id, kit_name)` 查重；保留旧字符串列一段时间做对照。
+1. `(manufacturer_id, product_line_id, kit_name)` 查重；保留旧字符串列一段时间做对照。
 2. `ProductRead.manufacturer` 改为 join 出来的规范名；`ProductCreate/Update` 接受 `manufacturer_id`（或“选厂 + 新建厂”的 UI）。
 3. 后台管理增加“厂家管理”：新增、改名、加别名、合并（把产品移过去、删旧厂）。
 4. 审核入库：`review_items` 加 `manufacturer_id`；新建产品时选厂/匹配 alias；原始 `brand` 继续保留。
