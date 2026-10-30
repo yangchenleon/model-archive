@@ -347,7 +347,7 @@ def test_bulk_channel_update(client):
     ).status_code == 422
 
 
-def test_product_code_normalizes_rg_prefix_and_release_date_is_kept(client):
+def test_product_code_is_preserved_and_release_date_is_kept(client):
     maker = make_manufacturer(client, "编号厂")
     product = make_product(
         client,
@@ -356,7 +356,7 @@ def test_product_code_normalizes_rg_prefix_and_release_date_is_kept(client):
         product_code="RG01",
         release_date="2010-07-24",
     )
-    assert product["product_code"] == "01"
+    assert product["product_code"] == "RG01"
     assert product["release_date"] == "2010-07-24"
 
     updated = client.patch(
@@ -364,7 +364,7 @@ def test_product_code_normalizes_rg_prefix_and_release_date_is_kept(client):
         json={"product_code": "RG02"},
     )
     assert updated.status_code == 200
-    assert updated.json()["product_code"] == "02"
+    assert updated.json()["product_code"] == "RG02"
 
 
 def test_edition_craft_and_extended_channels(client):

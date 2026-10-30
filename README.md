@@ -75,7 +75,9 @@ part of product identity.
 `regular` / `pb` / `base` / `event` / `lottery` / `limited`; omit or send `null` for 未知.
 `edition` is the official version label (free text); `regular` products default
 to `普通版`. `craft` is a single common finish/process value. All are optional
-metadata, not part of duplicate detection.
+metadata, not part of duplicate detection. The digit-only `product_code` for
+万代 regular products is a one-off data cleanup for the current 78dm import,
+not a general API rule; non-Bandai codes such as `MNP-XH01` are preserved.
 
 CSV/Excel/JSON parsing and format validation belong to the external tool that
 produces the payload; this project only accepts clean product fields. The

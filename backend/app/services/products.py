@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -78,18 +77,6 @@ def _validate_craft(craft: str | None) -> None:
         raise Invalid(f"craft 必须是 {list(CRAFTS)} 或 null")
 
 
-def normalize_product_code(value: str | None) -> str | None:
-    """RG01 -> 01; other codes are left untouched."""
-    if value is None:
-        return None
-    code = value.strip()
-    if not code:
-        return None
-    if re.fullmatch(r"RG\d+", code, flags=re.I):
-        return code[2:]
-    return code
-
-
 def _validate_line(session: Session, manufacturer_id: UUID, line_id: UUID | None) -> None:
     if line_id is not None:
         require_line(session, line_id, manufacturer_id)
@@ -108,7 +95,6 @@ def create(session: Session, payload: ProductCreate) -> Product:
     ) is not None:
         raise Conflict("已存在同厂商同系列下的同名产品")
     data = payload.model_dump()
-    data["product_code"] = normalize_product_code(payload.product_code)
     product = Product(**{**data, "kit_name": kit_name})
     session.add(product)
     session.commit()
@@ -142,7 +128,6 @@ def create_many(session: Session, payloads: list[ProductCreate]) -> list[Product
             raise Conflict(f"第 {index} 条已存在同厂商同系列同名产品：{kit_name}")
         seen.add(key)
         data = item.model_dump()
-        data["product_code"] = normalize_product_code(item.product_code)
         product = Product(**{**data, "kit_name": kit_name})
         session.add(product)
         products.append(product)
@@ -182,9 +167,6 @@ def update_product(session: Session, product_id: UUID, payload: ProductUpdate) -
         if not source:
             raise Invalid("资料来源不能为空")
         data["source"] = source
-    if "product_code" in data:
-        data["product_code"] = normalize_product_code(data["product_code"])
-
     manufacturer_id = data.get("manufacturer_id", product.manufacturer_id)
     if manufacturer_id is None:
         raise Invalid("厂商不能为空")

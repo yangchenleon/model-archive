@@ -1,7 +1,7 @@
 # 在另一台主机部署并导入数据
 
 > 适用：Docker Compose + PostgreSQL 16。本文以当前导出的
-> `backups/model-archive-20261028.dump`（custom format，387 KB）为例。
+> `backups/model-archive-20261028.dump`（custom format，390 KB）为例。
 > 目标主机只需要 Docker、Compose、代码和这个 dump；不需要把源主机的数据库目录拷过去。
 
 ## 0. 需要带到新主机的东西
@@ -100,7 +100,7 @@ Windows PowerShell：
 ```powershell
 Get-FileHash .\backups\model-archive-20261028.dump -Algorithm SHA256
 Get-Content .\backups\model-archive-20261028.dump.sha256
-# 两个哈希应一致：55a20747ea9a626cae3b3030f2df992f31e1e98e540a8a5c37baf409a17f809c
+# 两个哈希应一致：8cd0d22374c89b068ab113e75dd73ce84a87abbf787c02cdbea5ec9adbbba6c1
 ```
 
 > dump 是 custom format（`pg_dump -Fc`），不是纯 SQL 文本；用 `pg_restore` 导入，不要直接 `psql < file`。

@@ -127,6 +127,22 @@ def infer_craft(*values: str) -> str | None:
     return None
 
 
+def code_for(source: dict, channel: str | None, serial: int | None) -> str | None:
+    # 78dm's code column is occasionally wrong (e.g. MG169 has code 170).
+    # For the ordinary-version sequence the name prefix is the reliable source.
+    code = ""
+    match = re.match(r"^\s*MG\s*(\d+)", source.get("name", ""), flags=re.I)
+    if match:
+        code = match.group(1)
+    if not code:
+        code = (source.get("code") or "").strip()
+    if not code and channel == "regular" and serial is not None:
+        code = f"{serial:02d}"
+    if code and channel == "regular":
+        return re.sub(r"\D", "", code)
+    return code or None
+
+
 def build_detail(product: dict, line: str) -> str:
     fields = [
         ("78dm", product.get("url", "")),
@@ -157,10 +173,13 @@ def main() -> None:
         raise SystemExit("empty manifest")
 
     rows: list[dict] = []
+    regular_serial = 0
     for product in raw:
         section = product.get("source_category", "")
         if section in EXCLUDED_SECTIONS:
             continue
+        if section == "普通版":
+            regular_serial += 1
         line = LINE_BY_SECTION.get(section, "MG")
         base_name = strip_code(product.get("name", ""))
         if not base_name:
@@ -180,6 +199,11 @@ def main() -> None:
             "work": WORK_BY_SECTION.get(section) or "高达",
             "craft": infer_craft(product.get("edition", ""), section, base_name),
             "release_date": parse_release_date(product.get("release_date", "")),
+            "product_code": code_for(
+                product,
+                channel,
+                regular_serial if section == "普通版" else None,
+            ),
         })
 
     # Disambiguate duplicate display names. Keep the regular one unsuffixed when
@@ -270,7 +294,7 @@ def main() -> None:
                 "id": row["id"],
                 "manufacturer_id": manufacturer.id,
                 "product_line_id": lines[row["line"]].id,
-                "product_code": source.get("code") or None,
+                "product_code": row["product_code"],
                 "kit_name": row["kit_name"],
                 "work": row["work"],
                 "release_channel": row["channel"],
