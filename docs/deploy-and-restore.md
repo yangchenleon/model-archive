@@ -18,7 +18,7 @@
 ```text
 products        2243
 review_items     875
-assets             0
+assets           139 (all pending)
 tags               0
 collections        0
 collection_items   0
@@ -171,7 +171,7 @@ select
 ```text
  products | review_items | assets | tags | collections | collection_items | manufacturers | product_lines |          alembic
 ----------+--------------+--------+------+-------------+------------------+---------------+---------------+----------------------------
-     2243 |          875 |      0 |    0 |           0 |                0 |            84 |           157 | 0026_edition_craft
+     2243 |          875 |    139 |    0 |           0 |                0 |            84 |           157 | 0026_edition_craft
 ```
 
 ---
@@ -204,7 +204,11 @@ http://<新主机IP>:5173
 - 产品目录：应看到 2243 条，其中万代 MG 794 / MGEX 8 / RG 232
 - 入库审核：875 条记录
 - 厂家管理：84 家厂家、157 个系列；厂家分类已完成，作品已填 39 条
-- 我的资产 / 标签队列 / 收藏集：0 条，属于正常
+- 我的资产：当前 dump 含 139 条 pending 资产（来源见下方注意），不是 0
+- 标签队列 / 收藏集：0 条，属于正常
+
+> 注意：本机在导出时有一个外部客户端持续 `POST /api/v1/assets`，产生了 139 条 pending 资产。
+> 如果不是你预期的数据，部署前先清理这些 pending 资产并重新导出 dump，避免把测试垃圾带到新主机。
 - Adminer：`http://<新主机IP>:18082`，server 填 `db`
 
 ---
