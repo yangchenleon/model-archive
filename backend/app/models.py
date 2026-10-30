@@ -56,8 +56,12 @@ class Product(Base):
     __tablename__ = "products"
     __table_args__ = (
         CheckConstraint(
-            "release_channel IS NULL OR release_channel IN ('regular', 'pb', 'limited', 'event', 'other')",
+            "release_channel IS NULL OR release_channel IN ('regular', 'pb', 'base', 'event', 'lottery', 'limited')",
             name="ck_products_release_channel",
+        ),
+        CheckConstraint(
+            "craft IS NULL OR craft IN ('clear', 'transparent', 'plated', 'clear_plated', 'color_plated', 'pearl', 'metallic', 'coating', 'matte', 'crystal', 'luminous')",
+            name="ck_products_craft",
         ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -71,6 +75,8 @@ class Product(Base):
     kit_name: Mapped[str] = mapped_column(String(240))
     work: Mapped[str | None] = mapped_column(String(120), index=True)
     release_channel: Mapped[str | None] = mapped_column(String(16), index=True)
+    edition: Mapped[str | None] = mapped_column(String(120), index=True)
+    craft: Mapped[str | None] = mapped_column(String(24), index=True)
     release_date: Mapped[date | None] = mapped_column(Date, index=True)
     detail: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(160))

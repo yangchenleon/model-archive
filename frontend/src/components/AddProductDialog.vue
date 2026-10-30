@@ -2,7 +2,7 @@
 import { reactive, ref, watch } from 'vue'
 import { LoaderCircle, Plus, X } from 'lucide-vue-next'
 import ManufacturerPicker from './ManufacturerPicker.vue'
-import { CHANNEL_OPTIONS } from '../taxonomy'
+import { CHANNEL_OPTIONS, CRAFT_OPTIONS } from '../taxonomy'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -19,6 +19,8 @@ const form = reactive({
   product_line_id: '',
   work: '',
   release_channel: '',
+  edition: '',
+  craft: '',
   release_date: '',
   detail: '',
   source: '手动录入',
@@ -93,6 +95,8 @@ async function submit() {
         product_line_id: form.product_line_id || null,
         work: valueOrNull(form.work),
         release_channel: form.release_channel || null,
+        edition: valueOrNull(form.edition),
+        craft: form.craft || null,
         release_date: form.release_date || null,
         source: form.source.trim(),
         product_code: valueOrNull(form.product_code),
@@ -102,7 +106,7 @@ async function submit() {
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.detail || '保存失败')
     Object.assign(form, {
-      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', release_date: '', detail: '', source: '手动录入',
+      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', craft: '', release_date: '', detail: '', source: '手动录入',
     })
     lines.value = []
     emit('created', body)
@@ -140,6 +144,13 @@ async function submit() {
             </select>
           </label>
           <label class="form-field"><span>作品 / IP</span><input v-model="form.work" placeholder="例如：EVANGELION / 勇者王 / SEED" /></label>
+          <label class="form-field"><span>版本 / edition</span><input v-model="form.edition" placeholder="官方标注：彩透ver / 豪华版 / Bilibili ver" /></label>
+          <label class="form-field"><span>工艺</span>
+            <select v-model="form.craft">
+              <option value="">未知/无</option>
+              <option v-for="craft in CRAFT_OPTIONS" :key="craft.value" :value="craft.value">{{ craft.label }}</option>
+            </select>
+          </label>
           <label class="form-field"><span>渠道</span>
             <select v-model="form.release_channel">
               <option value="">未知</option>

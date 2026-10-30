@@ -13,7 +13,7 @@ import PrintView from './components/PrintView.vue'
 import CollectionsView from './components/CollectionsView.vue'
 import CollectionDetail from './components/CollectionDetail.vue'
 import TaxonomyAdmin from './components/TaxonomyAdmin.vue'
-import { CHANNEL_OPTIONS, categoryLabel, categoryOrder, channelLabel, fetchManufacturers } from './taxonomy'
+import { CHANNEL_OPTIONS, CRAFT_OPTIONS, categoryLabel, categoryOrder, channelLabel, craftLabel, fetchManufacturers } from './taxonomy'
 
 const SECTIONS = ['directory', 'review', 'admin', 'taxonomy', 'inventory', 'collections', 'labels', 'print', 'wishlist', 'activity']
 const activeSection = ref('directory')
@@ -69,6 +69,8 @@ const search = ref('')
 const lineFilter = ref('')
 const channelFilter = ref('')
 const workFilter = ref('')
+const editionFilter = ref('')
+const craftFilter = ref('')
 const makerFilter = ref('')
 const view = ref('grid')
 const addDialogOpen = ref(false)
@@ -151,11 +153,52 @@ const productWorks = computed(() => {
     .sort((a, b) => (a.value === 'unknown' ? 1 : b.value === 'unknown' ? -1 : a.label.localeCompare(b.label, 'zh-CN')))
 })
 
+// 版本/edition 官方文本，只列当前范围里出现的值
+const productEditions = computed(() => {
+  const sourceList = products.value.filter((item) => {
+    if (makerFilter.value && makerName(item) !== makerFilter.value) return false
+    if (lineFilter.value && (item.product_line || '未知') !== lineFilter.value) return false
+    if (channelFilter.value && (item.release_channel || 'unknown') !== channelFilter.value) return false
+    if (workFilter.value && (item.work || 'unknown') !== workFilter.value) return false
+    return true
+  })
+  const counts = new Map()
+  for (const item of sourceList) {
+    const key = item.edition || 'unknown'
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  return [...counts.entries()]
+    .map(([value, count]) => ({ value, label: value === 'unknown' ? '未知' : value, count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'zh-CN'))
+})
+
+// 工艺是固定枚举，只列当前范围里出现的值
+const productCrafts = computed(() => {
+  const sourceList = products.value.filter((item) => {
+    if (makerFilter.value && makerName(item) !== makerFilter.value) return false
+    if (lineFilter.value && (item.product_line || '未知') !== lineFilter.value) return false
+    if (channelFilter.value && (item.release_channel || 'unknown') !== channelFilter.value) return false
+    if (workFilter.value && (item.work || 'unknown') !== workFilter.value) return false
+    if (editionFilter.value && (item.edition || 'unknown') !== editionFilter.value) return false
+    return true
+  })
+  const counts = new Map()
+  for (const item of sourceList) {
+    const key = item.craft || 'unknown'
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  return [{ value: 'unknown', label: '未知', count: counts.get('unknown') || 0 }]
+    .concat(CRAFT_OPTIONS.filter((craft) => counts.has(craft.value)).map((craft) => ({ ...craft, count: counts.get(craft.value) })))
+    .filter((option) => option.count)
+})
+
 // 如果先选系列，再选厂商的话，则产品恢复全局筛选（清空已选系列）
 watch(makerFilter, () => {
   lineFilter.value = ''
   channelFilter.value = ''
   workFilter.value = ''
+  editionFilter.value = ''
+  craftFilter.value = ''
 })
 
 watch(lineFilter, () => {
@@ -302,12 +345,16 @@ const filteredProducts = computed(() => {
       const lineName = item.product_line || '未知'
       const channelName = item.release_channel || 'unknown'
       const workName = item.work || 'unknown'
-      const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, lineName, channelLabel(channelName), item.work].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
+      const editionName = item.edition || 'unknown'
+      const craftName = item.craft || 'unknown'
+      const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, lineName, channelLabel(channelName), item.work, item.edition, craftLabel(item.craft)].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
       return matchText
         && (!makerFilter.value || makerName(item) === makerFilter.value)
         && (!lineFilter.value || lineName === lineFilter.value)
         && (!channelFilter.value || channelName === channelFilter.value)
         && (!workFilter.value || workName === workFilter.value)
+        && (!editionFilter.value || editionName === editionFilter.value)
+        && (!craftFilter.value || craftName === craftFilter.value)
     })
     .slice()
     .sort((a, b) => {
@@ -352,7 +399,7 @@ async function loadProducts() {
   loading.value = true
   loadError.value = ''
   try {
-    const response = await fetch('/api/v1/products?limit=2000')
+    const response = await fetch('/api/v1/products?limit=5000')
     if (!response.ok) throw new Error('产品目录请求失败')
     products.value = await response.json()
   } catch {
@@ -367,6 +414,8 @@ function resetFilters() {
   lineFilter.value = ''
   channelFilter.value = ''
   workFilter.value = ''
+  editionFilter.value = ''
+  craftFilter.value = ''
   if (!selectedMaker.value) makerFilter.value = ''
 }
 
@@ -519,12 +568,14 @@ onMounted(() => {
             <label class="search-field"><Search :size="18" /><input v-model="search" type="search" :placeholder="selectedMaker ? '搜索当前厂牌的产品' : '搜索产品名、厂商或系列'" /></label>
             <label class="select-field"><Filter :size="16" /><select v-model="channelFilter"><option value="">所有渠道</option><option v-for="channel in productChannels" :key="channel.value" :value="channel.value">{{ channel.label }} {{ channel.count }}</option></select></label>
             <label class="select-field"><Filter :size="16" /><select v-model="workFilter"><option value="">所有作品</option><option v-for="work in productWorks" :key="work.value" :value="work.value">{{ work.label }} {{ work.count }}</option></select></label>
+            <label class="select-field"><Filter :size="16" /><select v-model="editionFilter"><option value="">所有版本</option><option v-for="edition in productEditions" :key="edition.value" :value="edition.value">{{ edition.label }} {{ edition.count }}</option></select></label>
+            <label class="select-field"><Filter :size="16" /><select v-model="craftFilter"><option value="">所有工艺</option><option v-for="craft in productCrafts" :key="craft.value" :value="craft.value">{{ craft.label }} {{ craft.count }}</option></select></label>
             <label class="select-field"><Filter :size="16" /><select v-model="productSort"><option value="code">按编号</option><option value="release_date">按发售时间</option><option value="name">按名称</option></select></label>
             <template v-if="!selectedMaker">
               <label class="select-field"><Building2 :size="16" /><select v-model="makerFilter"><option value="">所有厂商</option><option v-for="maker in makers" :key="maker" :value="maker">{{ maker }}</option></select></label>
               <label class="select-field"><Filter :size="16" /><select v-model="lineFilter"><option value="">所有系列</option><option v-for="line in productLines" :key="line" :value="line">{{ line }}</option></select></label>
             </template>
-            <button v-if="search || lineFilter || channelFilter || workFilter || (!selectedMaker && makerFilter)" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
+            <button v-if="search || lineFilter || channelFilter || workFilter || editionFilter || craftFilter || (!selectedMaker && makerFilter)" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
             <span class="result-count">{{ filteredProducts.length }} 项</span>
             <div class="view-switch" aria-label="视图方式"><button :class="{ selected: view === 'grid' }" type="button" aria-label="网格视图" title="网格视图" @click="view = 'grid'"><Grid2X2 :size="17" /></button><button :class="{ selected: view === 'list' }" type="button" aria-label="列表视图" title="列表视图" @click="view = 'list'"><List :size="18" /></button></div>
           </section>

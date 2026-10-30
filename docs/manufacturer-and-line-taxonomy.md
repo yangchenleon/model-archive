@@ -34,14 +34,17 @@
    - 产品改厂家时，如果原系列不属于新厂家，自动回到未知/要求重选。
 
 6. **渠道不塞进系列**
-   - 产品单独有 `release_channel`：`regular / pb / limited / event / other`，空 = 未知。
+   - 产品单独有 `release_channel`：`regular / pb / base / event / lottery / limited`，空 = 未知。
+   - `regular` 只对应 78dm「普通版」；`event` 含会场、联名、竞赛、周年；`limited` 是渠道不明确的限定兜底；`base`/`lottery` 分别对应高达基地/一番赏。
    - 渠道是封闭维度，不是 78dm 的“级别或分类”。例如 SEED 页面里的 `HG SEED HD`、`1/100 SEED` 是 line/规格，`网络限定` 才是 PB 渠道。
    - 不要做“系列 → 子系列 → 渠道”的树。
 
-7. **作品/IP 是第三个正交维度**
-   - `products.work` 可空，例如 `EVANGELION`、`勇者王`、`机动警察`、`SEED`。
-   - 同一个 `RG` line 下可以有多个作品；不能把 EVA 拆成 `RG EVA` 新 line。
-   - 不参与产品身份查重。
+7. **作品/IP、版本、工艺是另外三个正交维度**
+   - `products.work`：作品/IP，例如 `EVANGELION`、`勇者王`、`机动警察`、`重力战线`。
+   - `products.edition`：官方版本标注，例如 `彩透ver`、`豪华版`、`Bilibili ver`。
+   - `products.craft`：单一常用工艺，例如 `彩透`、`电镀`、`电镀透明`、`水晶`。
+   - 都不参与产品身份查重；同一个 `RG`/`MG` line 下可以有多个作品、版本、工艺。
+
 8. **发售时间**
    - `products.release_date` 只存首次发售日期；再版/延期原文留在 `detail`。
    - 产品列表默认按编号，没编号再按发售时间；也可切换排序。
@@ -50,13 +53,13 @@
 
 | 指标 | 数值 |
 | --- | ---: |
-| 产品 | 1446 |
+| 产品 | 2243 |
 | 厂家 | 84 |
 | 系列 | 157 |
 | 系列为未知的产品 | 30 |
 | 未分类厂家 | 0 |
 | 系列名去重 | 84 |
-| 已标注作品/IP | 18 |
+| 已标注作品/IP | 39 |
 
 初始分类/等级只填了明确点名的；其余 79 家后来已在后台归类，目前分类为 1 高达 / 21 国模 / 62 KO，未分类为 0：
 
@@ -103,7 +106,9 @@ products (
     manufacturer_id uuid not null references manufacturers(id) on delete restrict,
     product_line_id uuid references product_lines(id) on delete set null,
     work varchar(120),           -- 作品/IP，例如 EVANGELION；可空
-    release_channel varchar(16), -- regular/pb/limited/event/other；可空
+    release_channel varchar(16), -- regular/pb/base/event/lottery/limited；可空
+    edition varchar(120),        -- 官方版本标注；可空
+    craft varchar(24),           -- 单一常用工艺；可空
     release_date date             -- 首次发售日期；可空
 )
 
@@ -209,7 +214,8 @@ review_items (
 2. 157 个系列的清理：改名、删掉不用的系列、补齐 30 个“未知”产品。
 3. B社是否并入万代（目前保留独立）。
 4. 只剩 1 组同厂商同系列同名产品（大班 / 88系列 / `MB 金异端 天·蜜娜`，编号 8804、8826）需要人工判断是否合并；其余 16 组同名不同系列已按新规则合法。
-5. `work` 目前只填了 18 条非高达 RG（EVANGELION 14、勇者王 3、机动警察 1）；高达系作品留空，等可靠来源再补。
+5. `work` 已填 39 条：EVANGELION 14、机动警察 11、一年战争 4、重力战线 4、勇者王 3、圣战士丹拜因 3；其余高达系作品留空，等可靠来源再补。
+6. MG 794、MGEX 8 已入库；MG 的 edition/craft 按 78dm 分类填充，特殊武器配件归 limited + `edition=配置包`。
 
 ## 九、明确不做
 

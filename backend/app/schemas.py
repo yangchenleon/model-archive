@@ -72,6 +72,8 @@ class ProductCreate(BaseModel):
     kit_name: str
     work: str | None = None
     release_channel: str | None = None
+    edition: str | None = None
+    craft: str | None = None
     release_date: date | None = None
     detail: str | None = None
     source: str
@@ -85,6 +87,8 @@ class ProductUpdate(BaseModel):
     kit_name: str | None = None
     work: str | None = None
     release_channel: str | None = None
+    edition: str | None = None
+    craft: str | None = None
     release_date: date | None = None
     detail: str | None = None
     source: str | None = None
@@ -107,6 +111,8 @@ class ProductRead(BaseModel):
     kit_name: str
     work: str | None = None
     release_channel: str | None = None
+    edition: str | None = None
+    craft: str | None = None
     release_date: date | None = None
     detail: str | None = None
     source: str
@@ -249,6 +255,8 @@ class ReviewCreateRequest(BaseModel):
     kit_name: str
     work: str | None = None
     release_channel: str | None = None
+    edition: str | None = None
+    craft: str | None = None
     release_date: date | None = None
     product_code: str | None = None
     detail: str | None = None
@@ -265,6 +273,8 @@ class ProductBrief(BaseModel):
     product_line: str | None = None
     work: str | None = None
     release_channel: str | None = None
+    edition: str | None = None
+    craft: str | None = None
     release_date: date | None = None
 
 

@@ -331,4 +331,5 @@ def test_deleting_a_collection_leaves_products_and_assets_alone(client):
 
     assert client.delete(f"/api/v1/collections/{collection['id']}").status_code == 200
     assert client.get(f"/api/v1/products/{product['id']}").status_code == 200
-    assert len(client.get("/api/v1/assets").json()) == 1
+    assets = client.get("/api/v1/assets").json()
+    assert any(asset["product"]["id"] == product["id"] for asset in assets)

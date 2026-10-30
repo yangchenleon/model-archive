@@ -23,7 +23,9 @@
 | `manufacturer_id` | → `manufacturers`，必填；产品身份的一半。 |
 | `product_line_id` | → `product_lines`，可空；空 = 未知。系列不参与身份。 |
 | `work` | 可空作品/IP，例如 `EVANGELION`、`勇者王`、`机动警察`、`SEED`；不是 line，不参与查重。 |
-| `release_channel` | 发售渠道：`regular / pb / limited / event / other`，空 = 未知。只是过滤属性，不参与查重。 |
+| `release_channel` | 发售渠道：`regular / pb / base / event / lottery / limited`，空 = 未知。只是过滤属性，不参与查重。 |
+| `edition` | 官方版本标注（彩透ver / 豪华版 / Bilibili ver…），可空；不参与查重。 |
+| `craft` | 单一常用工艺：彩透/透明/电镀/电镀透明/彩色电镀/珍珠/金属/涂层/消光/水晶/夜光；空 = 无/未知。 |
 | `release_date` | 首次发售日期；再版信息保留在 `detail`。只用于展示/排序，不参与查重。 |
 | `created_at` | 内部入库审计时间，不在产品 UI/CSV 中展示。 |
 | `product_code` | 自由文本，可空；厂商给产品的市场编号。 |

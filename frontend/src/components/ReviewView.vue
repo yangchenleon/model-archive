@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { Check, ExternalLink, LoaderCircle, RotateCcw, Search, SkipForward } from 'lucide-vue-next'
 import SkippedItems from './SkippedItems.vue'
 import ManufacturerPicker from './ManufacturerPicker.vue'
-import { CHANNEL_OPTIONS, fetchLines, fetchManufacturers } from '../taxonomy'
+import { CHANNEL_OPTIONS, CRAFT_OPTIONS, fetchLines, fetchManufacturers } from '../taxonomy'
 
 const emit = defineEmits(['pending'])
 
@@ -27,7 +27,7 @@ const showSkipped = ref(false)
 
 const manufacturers = ref([])
 const lines = ref([])
-const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', work: '', release_channel: '', release_date: '', price_text: '' })
+const form = reactive({ manufacturer_id: '', kit_name: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', craft: '', release_date: '', price_text: '' })
 const search = ref('')
 const candidates = ref([])
 const selected = ref(null)
@@ -98,6 +98,8 @@ async function prepare(next) {
   form.product_line_id = ''
   form.work = ''
   form.release_channel = ''
+  form.edition = ''
+  form.craft = ''
   form.release_date = ''
   form.price_text = next.price_raw || ''
   selected.value = null
@@ -208,6 +210,8 @@ async function createProduct() {
         kit_name: form.kit_name.trim(),
         work: form.work.trim() || null,
         release_channel: form.release_channel || null,
+        edition: form.edition.trim() || null,
+        craft: form.craft || null,
         release_date: form.release_date || null,
         product_code: form.product_code.trim() || null,
         detail: item.value.detail,
@@ -353,6 +357,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
             </select>
           </label>
           <label><span>作品 / IP</span><input v-model="form.work" placeholder="EVANGELION / 勇者王 …" /></label>
+          <label><span>版本 / edition</span><input v-model="form.edition" placeholder="官方标注：彩透ver / 豪华版 / Bilibili ver" /></label>
+          <label><span>工艺</span>
+            <select v-model="form.craft">
+              <option value="">未知/无</option>
+              <option v-for="craft in CRAFT_OPTIONS" :key="craft.value" :value="craft.value">{{ craft.label }}</option>
+            </select>
+          </label>
           <label><span>渠道</span>
             <select v-model="form.release_channel">
               <option value="">未知</option>

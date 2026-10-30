@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.channels import RELEASE_CHANNELS
+from app.crafts import CRAFTS
 from app.models import Manufacturer, Product, ProductLine, ReviewItem
 from app.schemas import ProductCreate, ProductUpdate
 from app.services.errors import Conflict, Invalid, NotFound
@@ -72,6 +73,11 @@ def _validate_channel(channel: str | None) -> None:
         raise Invalid(f"release_channel 必须是 {list(RELEASE_CHANNELS)} 或 null")
 
 
+def _validate_craft(craft: str | None) -> None:
+    if craft is not None and craft not in CRAFTS:
+        raise Invalid(f"craft 必须是 {list(CRAFTS)} 或 null")
+
+
 def normalize_product_code(value: str | None) -> str | None:
     """RG01 -> 01; other codes are left untouched."""
     if value is None:
@@ -96,6 +102,7 @@ def create(session: Session, payload: ProductCreate) -> Product:
     _require_manufacturer(session, payload.manufacturer_id)
     _validate_line(session, payload.manufacturer_id, payload.product_line_id)
     _validate_channel(payload.release_channel)
+    _validate_craft(payload.craft)
     if find_duplicate(
         session, payload.manufacturer_id, payload.product_line_id, kit_name
     ) is not None:
@@ -125,6 +132,7 @@ def create_many(session: Session, payloads: list[ProductCreate]) -> list[Product
         _require_manufacturer(session, item.manufacturer_id)
         _validate_line(session, item.manufacturer_id, item.product_line_id)
         _validate_channel(item.release_channel)
+        _validate_craft(item.craft)
         key = (item.manufacturer_id, item.product_line_id, kit_name)
         if key in seen:
             raise Conflict(f"第 {index} 条与本次提交内的产品重复：{kit_name}")
@@ -184,6 +192,8 @@ def update_product(session: Session, product_id: UUID, payload: ProductUpdate) -
 
     if "release_channel" in data:
         _validate_channel(data["release_channel"])
+    if "craft" in data:
+        _validate_craft(data["craft"])
 
     target_line_id = data.get("product_line_id", product.product_line_id)
     if "product_line_id" in data:

@@ -42,7 +42,7 @@ watch(() => props.open, async (open) => {
   loading.value = true
   error.value = ''
   try {
-    const response = await fetch('/api/v1/products?limit=2000')
+    const response = await fetch('/api/v1/products?limit=5000')
     if (!response.ok) throw new Error('产品目录请求失败')
     products.value = await response.json()
   } catch (exc) {

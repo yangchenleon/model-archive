@@ -27,6 +27,20 @@
 
 当前示例 `341672` 是 `RG系列拼装模型`，共 235 款。
 
+再抓 MG：
+
+```bash
+.venv/bin/python tools/scrape_78dm.py \
+  --url https://acg.78dm.net/ct/2328.html \
+  --out imports/78dm/2328 --skip-images
+
+.venv/bin/python tests/import_78dm_mg.py           # dry run
+.venv/bin/python tests/import_78dm_mg.py --apply   # replace MG/MGEX
+```
+
+`2328` 主页面只显示每个子分类的前 42 张卡，抓取器会继续抓所有子分类页；
+最终 817 条原始记录，排除 15 条未商品化参考出品，导入 802 条（MG 794 + MGEX 8）。
+
 ## 2. Cookie
 
 - `78cookie2` 里的 `_identity` 单独可用。
@@ -45,6 +59,7 @@ tools/
   download_78dm_images.py  # 根据 products.json 并发下载封面
 tests/
   import_78dm_rg.py        # 将 RG manifest 替换进 PostgreSQL（一次性任务）
+  import_78dm_mg.py        # 将 MG/MGEX manifest 替换进 PostgreSQL（一次性任务）
   seed_review_queue.py     # 审核队列一次性种子
 imports/78dm/<series-id>/
   series.json              # 系列信息、子分类、产品 URL 列表
@@ -114,7 +129,7 @@ imports/78dm/<series-id>/
 - 普通版 → `regular`
 - 网络限定版 → `pb`
 - 其他限定版 → `limited`
-- 参考出品/开发中 → `other`，版本含“限定”则 `limited`
+- 参考出品/开发中 → 不入库；通用抓取器给 `None`，版本含“限定”则 `limited`
 - 其他子分类按版本含“网络限定/网限/限定/普通版”推断，否则 `null`
 
 `work` 不写入 manifest，由导入脚本按子分类填：
@@ -145,6 +160,24 @@ imports/78dm/<series-id>/
 - 封面路径写入 `detail` 的“封面”，数据库暂无图片字段/对象存储。
 - 所有 RG 保持 `line=RG`；EVA/勇者王/机动警察不拆 line。
 
+### MG / MGEX
+
+`2328` 的子分类是混维度的，导入器按以下规则处理：
+
+- `line=MG`，`EXtreme` 单独 `line=MGEX`。
+- `普通版` → `regular`；`网络限定版` → `pb`。
+- `其他限定版` / HD配色 / 官方豪华/特别 / 限定透明/电镀 / 水晶 / 彩色电镀 / 限量涂装 / 特殊武器配件 → `limited`。
+- `一番赏` → `lottery`；`高达30周年透明配件版` / `竞赛奖品版` → `event`。
+- 重力战线、一年战争 → `limited` + `work`；圣战士丹拜因、机动警察 → `regular` + `work`。
+- 特殊武器配件：`edition=配置包`。
+- 官方豪华版/特别版：`edition=豪华版/特别版`。
+- HD配色、限定透明/电镀/水晶/彩色电镀、竞赛奖品、30周年、特别涂装：`edition` 用对应官方分类。
+- `往期未商品化参考出品` 15 条不入库。
+- 同名不同版本：保留普通版原名，其他加 `（edition/分类）` 后缀，保证产品名唯一。
+- `craft` 从 edition/名称提取单值工艺；不明确留空。
+
+`import_78dm_mg.py` 默认 dry-run，`--apply` 会替换现有 `万代/MG` 和 `万代/MGEX`。
+
 ## 7. 验证
 
 ```bash
@@ -158,13 +191,14 @@ npm run build
 数据库抽查：
 
 ```sql
-select count(*) from products; -- 1446 (2026-10-29)
-select count(*) from products p
+select count(*) from products; -- 2243 (2026-10-30)
+select l.name, count(*) from products p
 join manufacturers m on m.id=p.manufacturer_id
 join product_lines l on l.id=p.product_line_id
-where m.name='万代' and l.name='RG'; -- 235
+where m.name='万代' group by l.name;
+-- MG 794 / MGEX 8 / RG 232
 
-select count(*) filter (where release_date is not null) -- 233
+select count(*) filter (where release_date is not null) -- 1000
 from products;
 ```
 

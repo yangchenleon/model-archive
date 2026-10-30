@@ -58,7 +58,7 @@ watch(
     submitError.value = ''
     loading.value = true
     try {
-      const response = await fetch('/api/v1/products?limit=2000')
+      const response = await fetch('/api/v1/products?limit=5000')
       if (!response.ok) throw new Error('产品目录读取失败')
       products.value = await response.json()
     } catch (exc) {

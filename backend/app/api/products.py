@@ -34,7 +34,9 @@ def list_products(
     search: str | None = None,
     release_channel: str | None = None,
     work: str | None = None,
-    limit: int = Query(default=100, le=2000),
+    edition: str | None = None,
+    craft: str | None = None,
+    limit: int = Query(default=100, le=5000),
     session: Session = Depends(get_session),
 ) -> list[Product]:
     statement = (
@@ -57,6 +59,10 @@ def list_products(
         statement = statement.where(Product.release_channel == release_channel)
     if work:
         statement = statement.where(Product.work == work)
+    if edition:
+        statement = statement.where(Product.edition == edition)
+    if craft:
+        statement = statement.where(Product.craft == craft)
     if search:
         term = f"%{search.strip()}%"
         statement = statement.where(or_(

@@ -17,6 +17,8 @@ Current operational scripts:
   `万代 / RG` catalog with the 78dm manifest in
   `imports/78dm/341672/products.json`. See
   [docs/78dm-scraping.md](../docs/78dm-scraping.md).
+- `import_78dm_mg.py` — dry-run by default; `--apply` replaces `万代 / MG` and
+  `万代 / MGEX` from `imports/78dm/2328/products.json`.
 - `seed_review_queue.py` — idempotent seed of `review_items` from
   `outputs/products/products.json`. See
   [docs/review-workflow.md](../docs/review-workflow.md).

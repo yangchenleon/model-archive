@@ -16,7 +16,8 @@
 
 ```text
 id, manufacturer_id, product_line_id(可空), work(可空), release_channel(可空),
-release_date(可空), product_code, kit_name, detail, source, price(自由文本), created_at
+edition(可空), craft(可空), release_date(可空), product_code, kit_name, detail,
+source, price(自由文本), created_at
 ```
 
 `review_items`
@@ -34,7 +35,8 @@ product_id, state, skip_reason, created_at, reviewed_at
 - `status_raw` 只是抽取原文，不参与产品表；产品没有状态
 - `brand` / `line` 保留抽取原文；`manufacturer_id` / `product_line_id` 是人工匹配结果
 - 产品身份是 `(manufacturer_id, product_line_id, kit_name)`；系列参与身份，同厂商同名但不同系列算不同产品；未知系列是独立一档
-- 渠道是产品属性：`regular / pb / limited / event / other`，空 = 未知；不参与产品身份
+- 渠道是产品属性：`regular / pb / base / event / lottery / limited`，空 = 未知；不参与产品身份
+- `edition` 是官方版本标注（彩透ver / 豪华版 / Bilibili ver…），`craft` 是单一常用工艺；都不参与身份
 - `work` 是作品/IP（EVA、勇者王、机动警察、SEED…），可空，不参与产品身份；它与 line、渠道互相正交
 - `release_date` 是首次发售日期；再版/延期说明留在 `detail`，不参与身份
 
@@ -99,7 +101,7 @@ product_id, state, skip_reason, created_at, reviewed_at
 | GET | `/api/v1/review/stats` | 队列计数（含 skipped / later） |
 | GET | `/api/v1/review/items?state=pending&sort=brand` | 待审列表（`q` 搜索、分页） |
 | POST | `/api/v1/review/{id}/map` | 关联到已有产品，body `{"product_id": "..."}` |
-| POST | `/api/v1/review/{id}/create` | 新建产品，body 需 `manufacturer_id`，可选 `product_line_id` / `work` / `release_channel` |
+| POST | `/api/v1/review/{id}/create` | 新建产品，body 需 `manufacturer_id`，可选 `product_line_id` / `work` / `release_channel` / `edition` / `craft` / `release_date` |
 | POST | `/api/v1/review/{id}/skip` | 跳过，body `{"reason": "later"}` |
 | POST | `/api/v1/review/{id}/reset` | 退回待审（清空 product_id / skip_reason / 厂家/系列匹配） |
 | PATCH | `/api/v1/products/{id}` | 编辑产品字段（改名/换厂商查重） |

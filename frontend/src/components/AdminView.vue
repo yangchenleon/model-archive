@@ -4,7 +4,7 @@ import {
   ArrowDown, ArrowUp, ChevronDown, Download, LoaderCircle, Pencil, Plus, RefreshCw, Save, Search, Trash2, X,
 } from 'lucide-vue-next'
 import ManufacturerPicker from './ManufacturerPicker.vue'
-import { CHANNEL_OPTIONS, channelLabel } from '../taxonomy'
+import { CHANNEL_OPTIONS, CRAFT_OPTIONS, channelLabel, craftLabel } from '../taxonomy'
 
 const SORT_FIELDS = [
   { key: 'manufacturer', label: '厂商' },
@@ -13,6 +13,8 @@ const SORT_FIELDS = [
   { key: 'product_line', label: '系列' },
   { key: 'work', label: '作品' },
   { key: 'release_channel', label: '渠道' },
+  { key: 'edition', label: '版本' },
+  { key: 'craft', label: '工艺' },
   { key: 'price', label: '价格' },
   { key: 'release_date', label: '发售时间' },
 ]
@@ -41,14 +43,14 @@ const detailProduct = ref(null)
 const audit = ref([])
 const auditLoading = ref(false)
 const form = reactive({
-  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', release_date: '', price: '', source: '', detail: '',
+  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', craft: '', release_date: '', price: '', source: '', detail: '',
 })
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase()
   const rows = term
     ? products.value.filter((product) =>
-      [product.kit_name, product.manufacturer, product.product_code, product.product_line, product.work, channelLabel(product.release_channel), product.price]
+      [product.kit_name, product.manufacturer, product.product_code, product.product_line, product.work, product.edition, craftLabel(product.craft), channelLabel(product.release_channel), product.price]
         .filter(Boolean).join(' ').toLowerCase().includes(term))
     : products.value
   const direction = sortDirection.value === 'asc' ? 1 : -1
@@ -80,7 +82,7 @@ async function loadProducts() {
   loading.value = true
   error.value = ''
   try {
-    products.value = await api('/api/v1/products?limit=2000')
+    products.value = await api('/api/v1/products?limit=5000')
     selectedIds.value = new Set()
   } catch (exc) {
     error.value = `产品读取失败：${exc.message}`
@@ -170,7 +172,7 @@ async function applyBulkChannel() {
 
 function resetForm() {
   Object.assign(form, {
-    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', release_date: '',
+    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', craft: '', release_date: '',
     price: '', source: '手动录入', detail: '',
   })
   lines.value = []
@@ -202,6 +204,8 @@ async function openEdit(product) {
     product_line_id: product.product_line_id || '',
     work: product.work || '',
     release_channel: product.release_channel || '',
+    edition: product.edition || '',
+    craft: product.craft || '',
     release_date: product.release_date || '',
     price: product.price || '',
     source: product.source || '',
@@ -238,6 +242,8 @@ function payload() {
     product_line_id: form.product_line_id || null,
     work: nullIfEmpty(form.work),
     release_channel: form.release_channel || null,
+    edition: nullIfEmpty(form.edition),
+    craft: form.craft || null,
     release_date: form.release_date || null,
     price: nullIfEmpty(form.price),
     source: form.source.trim(),
@@ -298,13 +304,14 @@ async function removeProduct() {
 }
 
 function exportCsv() {
-  const headers = ['厂商', '产品编号', '系列', '作品', '渠道', '模型名称', '价格', '发售时间', '资料来源', '详情', 'id']
+  const headers = ['厂商', '产品编号', '系列', '作品', '渠道', '版本', '工艺', '模型名称', '价格', '发售时间', '资料来源', '详情', 'id']
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const lines = [headers.join(',')]
   for (const product of filtered.value) {
     lines.push([
-      product.manufacturer, product.product_code, product.product_line, product.work, channelLabel(product.release_channel), product.kit_name,
-      product.price, product.release_date, product.source, product.detail, product.id,
+      product.manufacturer, product.product_code, product.product_line, product.work, channelLabel(product.release_channel),
+      product.edition, craftLabel(product.craft), product.kit_name, product.price, product.release_date,
+      product.source, product.detail, product.id,
     ].map(escape).join(','))
   }
   const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -384,6 +391,8 @@ loadProducts()
             <td>{{ product.product_line || '—' }}</td>
             <td>{{ product.work || '—' }}</td>
             <td>{{ channelLabel(product.release_channel) }}</td>
+            <td>{{ product.edition || '—' }}</td>
+            <td>{{ craftLabel(product.craft) }}</td>
             <td class="price">{{ product.price || '—' }}</td>
             <td class="date">{{ product.release_date || '—' }}</td>
             <td class="row-actions"><button class="icon-button" type="button" aria-label="编辑" @click.stop="openEdit(product)"><Pencil :size="15" /></button></td>
@@ -413,6 +422,8 @@ loadProducts()
               <div><dt>系列</dt><dd>{{ detailProduct.product_line || '未知' }}</dd></div>
               <div><dt>作品</dt><dd>{{ detailProduct.work || '—' }}</dd></div>
               <div><dt>渠道</dt><dd>{{ channelLabel(detailProduct.release_channel) }}</dd></div>
+              <div><dt>版本</dt><dd>{{ detailProduct.edition || '—' }}</dd></div>
+              <div><dt>工艺</dt><dd>{{ craftLabel(detailProduct.craft) }}</dd></div>
               <div><dt>价格</dt><dd>{{ detailProduct.price || '—' }}</dd></div>
               <div><dt>发售时间</dt><dd>{{ detailProduct.release_date || '—' }}</dd></div>
               <div class="full"><dt>资料来源</dt><dd class="detail-text">{{ detailProduct.source || '—' }}</dd></div>
@@ -444,6 +455,13 @@ loadProducts()
                 </select>
               </label>
               <label><span>作品 / IP</span><input v-model="form.work" placeholder="例如：EVANGELION / 勇者王 / SEED" /></label>
+              <label><span>版本 / edition</span><input v-model="form.edition" placeholder="官方标注：彩透ver / 豪华版 / Bilibili ver" /></label>
+              <label><span>工艺</span>
+                <select v-model="form.craft">
+                  <option value="">未知/无</option>
+                  <option v-for="craft in CRAFT_OPTIONS" :key="craft.value" :value="craft.value">{{ craft.label }}</option>
+                </select>
+              </label>
               <label><span>渠道</span>
                 <select v-model="form.release_channel">
                   <option value="">未知</option>

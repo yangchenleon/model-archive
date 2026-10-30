@@ -43,7 +43,7 @@ def infer_channel(section_name: str, version: str) -> str | None:
     if section_name == "参考出品/开发中商品":
         if "限定" in version:
             return "limited"
-        return "other"
+        return None
     if "网络限定" in version or "网限" in version or version.upper() == "PB":
         return "pb"
     if "限定" in version:

@@ -39,6 +39,13 @@ Preview and apply the RG replacement (the apply step deletes the existing
 .venv/bin/python tests/import_78dm_rg.py --apply   # destructive replace
 ```
 
+MG/MGEX 2328:
+
+```bash
+.venv/bin/python tests/import_78dm_mg.py           # dry run
+.venv/bin/python tests/import_78dm_mg.py --apply   # replace 万代/MG + MGEX
+```
+
 The importer keeps all rows on `line=RG`, strips a leading numeric index from
 the name, and fills `work` only for the explicit EVANGELION / 勇者王 / 机动警察
 subcategories. Gundam work remains NULL until sourced reliably.
@@ -47,6 +54,7 @@ subcategories. Gundam work remains NULL until sourced reliably.
 database mutators live in `tests/` instead:
 
 - `tests/import_78dm_rg.py` — replace `万代/RG` from a local manifest
+- `tests/import_78dm_mg.py` — replace `万代/MG` + `万代/MGEX`
 - `tests/seed_review_queue.py` — idempotent review-queue seed
 
 ## Background and scope

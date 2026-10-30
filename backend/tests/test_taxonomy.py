@@ -367,6 +367,44 @@ def test_product_code_normalizes_rg_prefix_and_release_date_is_kept(client):
     assert updated.json()["product_code"] == "02"
 
 
+def test_edition_craft_and_extended_channels(client):
+    maker = make_manufacturer(client, "版本厂")
+    product = make_product(
+        client,
+        maker["id"],
+        "版本机体",
+        edition="Bilibili ver",
+        craft="clear",
+        release_channel="event",
+    )
+    assert product["edition"] == "Bilibili ver"
+    assert product["craft"] == "clear"
+    assert product["release_channel"] == "event"
+
+    for channel in ("base", "lottery"):
+        moved = client.patch(
+            f"/api/v1/products/{product['id']}",
+            json={"release_channel": channel},
+        )
+        assert moved.status_code == 200
+        assert moved.json()["release_channel"] == channel
+
+    assert client.patch(
+        f"/api/v1/products/{product['id']}",
+        json={"release_channel": "other"},
+    ).status_code == 422
+    assert client.patch(
+        f"/api/v1/products/{product['id']}",
+        json={"craft": "not-a-craft"},
+    ).status_code == 422
+
+    rows = client.get(
+        "/api/v1/products",
+        params={"edition": "Bilibili ver", "craft": "clear", "search": "版本机体"},
+    ).json()
+    assert [row["id"] for row in rows] == [product["id"]]
+
+
 def test_work_is_optional_metadata_and_filterable(client):
     maker = make_manufacturer(client, "作品厂")
     product = make_product(client, maker["id"], "EVA 初号机", work="TEST-WORK")
