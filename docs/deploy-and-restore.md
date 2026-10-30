@@ -1,5 +1,7 @@
 # 在另一台主机部署并导入数据
 
+> 需要一页版流程和当前数据快照：见 [deployment-handoff.md](deployment-handoff.md)。
+
 > 适用：Docker Compose + PostgreSQL 16。本文以当前导出的
 > `backups/model-archive-20261028.dump`（custom format，391 KB）为例。
 > 目标主机只需要 Docker、Compose、代码和这个 dump；不需要把源主机的数据库目录拷过去。

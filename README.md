@@ -13,6 +13,7 @@ docker compose up --build -d
 - Database browser (Adminer): <http://localhost:18080>
 - Product archive frontend: <http://localhost:5173>
 - Deploy to another host + import a database dump: [docs/deploy-and-restore.md](docs/deploy-and-restore.md)
+- One-page deployment handoff for the current dataset: [docs/deployment-handoff.md](docs/deployment-handoff.md)
 - Manufacturer directory assessment (historical): [docs/manufacturer-normalization.md](docs/manufacturer-normalization.md)
 - Manufacturer/series taxonomy (implemented): [docs/manufacturer-and-line-taxonomy.md](docs/manufacturer-and-line-taxonomy.md)
 - 78dm scraping and RG import runbook: [docs/78dm-scraping.md](docs/78dm-scraping.md)
