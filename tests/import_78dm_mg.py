@@ -64,7 +64,7 @@ EDITION_BY_SECTION = {
     "HD配色": "HD配色",
     "官方豪华版": "豪华版",
     "官方特别版": "特别版",
-    "特殊武器配件": "配置包",
+    "特殊武器配件": "配件包",
     "高达30周年透明配件版": "30周年透明配件版",
     "限定透明版": "限定透明版",
     "限定电镀透明版": "限定电镀透明版",
@@ -73,7 +73,6 @@ EDITION_BY_SECTION = {
     "竞赛奖品版": "竞赛奖品版",
     "水晶版": "水晶版",
     "彩色电镀版": "彩色电镀版",
-    "一年战争版": "一年战争版",
 }
 
 WORK_BY_SECTION = {
@@ -166,15 +165,19 @@ def main() -> None:
         base_name = strip_code(product.get("name", ""))
         if not base_name:
             raise SystemExit(f"empty name for {product.get('id')}")
+        channel = CHANNEL_BY_SECTION.get(section)
+        edition = EDITION_BY_SECTION.get(section)
+        if channel == "regular" and not edition:
+            edition = "普通版"
         rows.append({
             "id": uuid4(),
             "source": product,
             "base_name": base_name,
             "line": line,
             "section": section,
-            "channel": CHANNEL_BY_SECTION.get(section),
-            "edition": EDITION_BY_SECTION.get(section),
-            "work": WORK_BY_SECTION.get(section),
+            "channel": channel,
+            "edition": edition,
+            "work": WORK_BY_SECTION.get(section) or "高达",
             "craft": infer_craft(product.get("edition", ""), section, base_name),
             "release_date": parse_release_date(product.get("release_date", "")),
         })

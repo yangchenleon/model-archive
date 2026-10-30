@@ -66,14 +66,16 @@ curl -X POST http://localhost:18000/api/v1/products/bulk \
 ```
 
 `product_line_id` is optional; omit it or send `null` for 未知. A line must
-belong to the chosen manufacturer. `work` is optional free text for the IP
-(e.g. `EVANGELION`); `release_date` is an optional ISO date (`YYYY-MM-DD`) and
-only the first release date is stored, with reprint notes kept in `detail`.
-Both are metadata, not part of product identity.
+belong to the chosen manufacturer. `work` is optional free text for the IP;
+for 万代 products the default is `高达`, while non-Gundam works are explicit.
+`release_date` is an optional ISO date (`YYYY-MM-DD`) and only the first release
+date is stored, with reprint notes kept in `detail`. Both are metadata, not
+part of product identity.
 `release_channel` is optional too:
 `regular` / `pb` / `base` / `event` / `lottery` / `limited`; omit or send `null` for 未知.
-`edition` is the official version label (free text); `craft` is a single common
-finish/process value. Both are optional metadata, not part of duplicate detection.
+`edition` is the official version label (free text); `regular` products default
+to `普通版`. `craft` is a single common finish/process value. All are optional
+metadata, not part of duplicate detection.
 
 CSV/Excel/JSON parsing and format validation belong to the external tool that
 produces the payload; this project only accepts clean product fields. The
