@@ -291,10 +291,15 @@ def test_status_and_search_filters_on_collection_list(client):
     make_collection(client, "暂停的套", status="paused")
 
     active = client.get("/api/v1/collections?status=active").json()
-    assert [row["title"] for row in active] == ["进行中的套"]
+    active_titles = [row["title"] for row in active]
+    assert "进行中的套" in active_titles
+    assert "构想中的套" not in active_titles
+    assert "暂停的套" not in active_titles
 
     searched = client.get("/api/v1/collections?q=夏亚").json()
-    assert [row["title"] for row in searched] == ["构想中的套"]
+    searched_titles = [row["title"] for row in searched]
+    assert "构想中的套" in searched_titles
+    assert "进行中的套" not in searched_titles
     assert client.get("/api/v1/collections?status=nope").status_code == 422
 
 

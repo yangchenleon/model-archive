@@ -1,7 +1,7 @@
 # 在另一台主机部署并导入数据
 
 > 适用：Docker Compose + PostgreSQL 16。本文以当前导出的
-> `backups/model-archive-20261028.dump`（custom format，390 KB）为例。
+> `backups/model-archive-20261028.dump`（custom format，391 KB）为例。
 > 目标主机只需要 Docker、Compose、代码和这个 dump；不需要把源主机的数据库目录拷过去。
 
 ## 0. 需要带到新主机的东西
@@ -19,15 +19,16 @@
 products        2243
 review_items     875
 assets           139 (all pending)
-tags               0
-collections        0
-collection_items   0
+tags               1
+collections        1
+collection_items  16
 manufacturers     84
-product_lines    157
+product_lines    156
 alembic          0026_edition_craft
 ```
 
-> 资产/标签/收藏集是 0，是因为导出时还没有这些数据；导入后目录、审核队列是完整的。
+> 资产有 139 条 pending，标签/收藏集各 1 条、收藏项 16 条；这些是当前库里的实际数据。
+> 如果 pending 资产不是预期的，部署前先清理并重新导出。
 
 ---
 
@@ -100,7 +101,7 @@ Windows PowerShell：
 ```powershell
 Get-FileHash .\backups\model-archive-20261028.dump -Algorithm SHA256
 Get-Content .\backups\model-archive-20261028.dump.sha256
-# 两个哈希应一致：8cd0d22374c89b068ab113e75dd73ce84a87abbf787c02cdbea5ec9adbbba6c1
+# 两个哈希应一致：92fd7c7ba61d6aed1492d5b328a2ea1cf5e805d3e000f92a66ac84210ac62473
 ```
 
 > dump 是 custom format（`pg_dump -Fc`），不是纯 SQL 文本；用 `pg_restore` 导入，不要直接 `psql < file`。
@@ -171,7 +172,7 @@ select
 ```text
  products | review_items | assets | tags | collections | collection_items | manufacturers | product_lines |          alembic
 ----------+--------------+--------+------+-------------+------------------+---------------+---------------+----------------------------
-     2243 |          875 |    139 |    0 |           0 |                0 |            84 |           157 | 0026_edition_craft
+     2243 |          875 |    139 |    1 |           1 |               16 |            84 |           156 | 0026_edition_craft
 ```
 
 ---
@@ -203,13 +204,23 @@ http://<新主机IP>:5173
 
 - 产品目录：应看到 2243 条，其中万代 MG 794 / MGEX 8 / RG 232
 - 入库审核：875 条记录
-- 厂家管理：84 家厂家、157 个系列；厂家分类已完成，作品已填 39 条
-- 我的资产：当前 dump 含 139 条 pending 资产（来源见下方注意），不是 0
-- 标签队列 / 收藏集：0 条，属于正常
+- 厂家管理：84 家厂家、156 个系列；厂家分类已完成，作品已填 1034 条
+- 我的资产：139 条 pending；标签 1 条、收藏集 1 个、收藏项 16 条
+- 标签队列 / 收藏集不是空库，导入后应能看到上述数据
 
 > 注意：本机在导出时有一个外部客户端持续 `POST /api/v1/assets`，产生了 139 条 pending 资产。
 > 如果不是你预期的数据，部署前先清理这些 pending 资产并重新导出 dump，避免把测试垃圾带到新主机。
-- Adminer：`http://<新主机IP>:18082`，server 填 `db`
+- Adminer：`http://<新主机IP>:18080`（或 `.env` 的 `ADMINER_PORT`），server 填 `db`
+
+> 注意：`docker-compose.yml` 默认把 API/前端/Adminer/Postgres 都绑定在
+> `127.0.0.1`，只允许本机访问。要从其他机器打开页面，用 SSH 隧道：
+>
+> ```bash
+> ssh -L 5173:127.0.0.1:5173 user@新主机
+> # 然后本机打开 http://127.0.0.1:5173
+> ```
+>
+> 或者把 compose 端口前的 `127.0.0.1:` 去掉，但这样会把服务暴露到网络，需自行加防火墙/反代。
 
 ---
 
