@@ -1,5 +1,6 @@
 <script setup>
 import { Barcode, Building2, Check, Plus, Tag } from 'lucide-vue-next'
+import { createTapGuard } from '../tapGuard'
 
 defineProps({
   product: { type: Object, required: true },
@@ -7,7 +8,12 @@ defineProps({
   owned: { type: Number, default: 0 },
 })
 
-defineEmits(['select', 'own'])
+const emit = defineEmits(['select', 'own'])
+const guard = createTapGuard()
+
+function select(product) {
+  if (guard.shouldActivate()) emit('select', product)
+}
 
 function shortName(name) {
   return name.length > 46 ? `${name.slice(0, 46)}...` : name
@@ -15,7 +21,14 @@ function shortName(name) {
 </script>
 
 <template>
-  <article class="product-card" :class="`is-${view}`" @click="$emit('select', product)">
+  <article
+    class="product-card"
+    :class="`is-${view}`"
+    @pointerdown="guard.pointerdown"
+    @pointermove="guard.pointermove"
+    @pointercancel="guard.pointercancel"
+    @click="select(product)"
+  >
     <div class="product-thumb" :title="product.kit_name">
       <span>{{ shortName(product.kit_name) }}</span>
       <em v-if="owned" class="owned-badge">×{{ owned }}</em>

@@ -4,6 +4,7 @@ import {
   ArrowDown, ArrowUp, ChevronDown, Download, LoaderCircle, Pencil, Plus, RefreshCw, Save, Search, Trash2, X,
 } from 'lucide-vue-next'
 import ManufacturerPicker from './ManufacturerPicker.vue'
+import { createTapGuard } from '../tapGuard'
 import { CHANNEL_OPTIONS, CRAFT_OPTIONS, channelLabel, craftLabel } from '../taxonomy'
 
 const SORT_FIELDS = [
@@ -191,6 +192,12 @@ function openDetail(product) {
   editorMode.value = null
   editing.value = null
   audit.value = []
+}
+
+const rowGuard = createTapGuard()
+
+function openDetailFromRow(product) {
+  if (rowGuard.shouldActivate()) openDetail(product)
 }
 
 async function openEdit(product) {
@@ -383,7 +390,14 @@ loadProducts()
           </tr>
         </thead>
         <tbody>
-          <tr v-for="product in filtered" :key="product.id" @click="openDetail(product)">
+          <tr
+            v-for="product in filtered"
+            :key="product.id"
+            @pointerdown="rowGuard.pointerdown"
+            @pointermove="rowGuard.pointermove"
+            @pointercancel="rowGuard.pointercancel"
+            @click="openDetailFromRow(product)"
+          >
             <td class="check-cell"><input type="checkbox" :checked="selectedIds.has(product.id)" :aria-label="`选择 ${product.kit_name}`" @click.stop @change="toggleOne(product.id, $event)" /></td>
             <td>{{ product.manufacturer || '—' }}</td>
             <td class="name">{{ product.kit_name }}</td>
