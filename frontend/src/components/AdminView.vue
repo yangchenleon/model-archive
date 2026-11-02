@@ -27,6 +27,7 @@ const lines = ref([])
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
+const manufacturerFilter = ref('')
 const busy = ref(false)
 const message = ref('')
 const messageError = ref(false)
@@ -49,11 +50,14 @@ const form = reactive({
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase()
-  const rows = term
-    ? products.value.filter((product) =>
+  let rows = manufacturerFilter.value
+    ? products.value.filter((product) => product.manufacturer_id === manufacturerFilter.value)
+    : products.value
+  if (term) {
+    rows = rows.filter((product) =>
       [product.kit_name, product.manufacturer, product.product_code, product.product_line, product.work, product.edition, craftLabel(product.craft), channelLabel(product.release_channel), product.price]
         .filter(Boolean).join(' ').toLowerCase().includes(term))
-    : products.value
+  }
   const direction = sortDirection.value === 'asc' ? 1 : -1
   return [...rows].sort((a, b) => {
     const left = sortKey.value === 'release_channel' ? channelLabel(a.release_channel) : (a[sortKey.value] ?? '')
@@ -363,6 +367,16 @@ loadProducts()
 
     <section class="toolbar admin-toolbar">
       <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索名称 / 厂商 / 编号 / 系列" /></label>
+      <div class="select-field maker-filter">
+        <ManufacturerPicker
+          v-model="manufacturerFilter"
+          :manufacturers="manufacturers"
+          placeholder="全部厂家（可搜索）"
+          allow-empty
+          empty-label="全部厂家"
+        />
+      </div>
+      <button v-if="manufacturerFilter" class="reset-button" type="button" @click="manufacturerFilter = ''"><X :size="15" />清除厂家</button>
       <span class="result-count">{{ filtered.length }} 项</span>
     </section>
 
@@ -534,6 +548,10 @@ loadProducts()
 <style scoped>
 .header-actions { display: flex; gap: 8px; }
 .admin-toolbar { margin-bottom: 16px; }
+.maker-filter { flex: 0 1 210px; padding: 0 9px; }
+.maker-filter :deep(.maker-picker),
+.maker-filter :deep(input) { width: 100%; }
+.maker-filter :deep(input) { padding: 0; color: #42534e; background: transparent; border: 0; outline: 0; }
 .bulk-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px; color: #24574d; font-size: 13px; background: #eef6f2; border: 1px solid #c9e2d7; border-radius: 7px; }
 .bulk-bar select { padding: 6px 8px; color: #22302b; background: #fff; border: 1px solid #cfd9d4; border-radius: 5px; }
 .admin-table .check-cell { width: 34px; padding-right: 4px; padding-left: 12px; }
