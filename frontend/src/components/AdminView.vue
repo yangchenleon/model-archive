@@ -203,20 +203,28 @@ function openDetailFromRow(product) {
 async function openEdit(product) {
   detailProduct.value = null
   editorMode.value = 'edit'
-  editing.value = { ...product }
+  // Re-read the row first: the list may be stale (e.g. an import ran in the
+  // background), and saving the stale copy would write its empty fields back.
+  let fresh = product
+  try {
+    fresh = await api(`/api/v1/products/${product.id}`)
+  } catch {
+    /* fall back to the list row */
+  }
+  editing.value = { ...fresh }
   Object.assign(form, {
-    kit_name: product.kit_name || '',
-    manufacturer_id: product.manufacturer_id || '',
-    product_code: product.product_code || '',
-    product_line_id: product.product_line_id || '',
-    work: product.work || '',
-    release_channel: product.release_channel || '',
-    edition: product.edition || '',
-    craft: product.craft || '',
-    release_date: product.release_date || '',
-    price: product.price || '',
-    source: product.source || '',
-    detail: product.detail || '',
+    kit_name: fresh.kit_name || '',
+    manufacturer_id: fresh.manufacturer_id || '',
+    product_code: fresh.product_code || '',
+    product_line_id: fresh.product_line_id || '',
+    work: fresh.work || '',
+    release_channel: fresh.release_channel || '',
+    edition: fresh.edition || '',
+    craft: fresh.craft || '',
+    release_date: fresh.release_date || '',
+    price: fresh.price || '',
+    source: fresh.source || '',
+    detail: fresh.detail || '',
   })
   await loadLines(form.manufacturer_id)
   audit.value = []
