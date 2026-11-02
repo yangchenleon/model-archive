@@ -61,6 +61,24 @@ def clean(value: str | None) -> str:
     return html.unescape(value).replace("\xa0", " ").strip()
 
 
+def parse_intro(html_text: str) -> str:
+    """Extract the 简介 block as plain text (paragraphs become new lines)."""
+    block = re.search(
+        r'<div id="introduction"[^>]*>(.*?)<!--\s*简介 end\s*-->',
+        html_text,
+        re.S,
+    )
+    if block:
+        body = block.group(1)
+    else:
+        block = re.search(r'<div id="introduction"[^>]*>(.*?)</div>', html_text, re.S)
+        body = block.group(1) if block else ""
+    body = re.sub(r'<span class="item-header">.*?</span>', "", body, flags=re.S)
+    body = re.sub(r"</p\s*>", "\n", body, flags=re.I)
+    body = re.sub(r"<p[^>]*>", "", body, flags=re.I)
+    return "\n".join(line.strip() for line in clean(body).splitlines() if line.strip())
+
+
 def load_cookie(path: Path) -> str:
     raw = path.read_text(encoding="utf-8").strip()
     return raw.split(";", 1)[0].strip()
@@ -113,13 +131,7 @@ def parse_series(html_text: str) -> dict:
         elif key == "厂商":
             manufacturer = value
 
-    intro = re.search(
-        r'<div id="introduction"[^>]*>.*?<p[^>]*>(.*?)</p>',
-        html_text,
-        re.S,
-    )
-    if intro:
-        description = clean(intro.group(1))
+    description = parse_intro(html_text)
 
     starts = [m.start() for m in re.finditer(r'<div class="item normal-list">', html_text)]
     end_marker = html_text.find("<!-- 系列单品列表 end -->")
@@ -232,6 +244,7 @@ def parse_product(html_text: str, url: str, ct_id: str, section: dict, series: d
         "material": fields.get("材料种类", ""),
         "specification": fields.get("规格", ""),
         "toy_category": fields.get("玩具分类", ""),
+        "intro": parse_intro(html_text),
         "image_url": image_url,
         "image_file": "",
         "fields": fields,

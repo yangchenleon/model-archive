@@ -60,6 +60,7 @@ tools/
 tests/
   import_78dm_rg.py        # 将 RG manifest 替换进 PostgreSQL（一次性任务）
   import_78dm_mg.py        # 将 MG/MGEX manifest 替换进 PostgreSQL（一次性任务）
+  import_78dm_modonghe.py  # 摩动核 manifest 增量更新（一次性任务）
   seed_review_queue.py     # 审核队列一次性种子
 imports/78dm/<series-id>/
   series.json              # 系列信息、子分类、产品 URL 列表
@@ -82,6 +83,7 @@ imports/78dm/<series-id>/
 4. 逐个抓单品页，解析右侧表格：
    - 厂商、系列、级别或分类、价格、名称、版本、编号
    - 发售时间、比例、人物名、材料种类、规格、玩具分类
+   - `#introduction` 简介块（`intro` 字段，段落转成换行）
 5. 抓封面：单品页 `showImage(..., w1200h1200)` 优先；详情页大图兜底。
 6. 写 `series.json`、`products.json`；可选下载封面。
 
@@ -118,6 +120,7 @@ imports/78dm/<series-id>/
   "material": "塑料",
   "specification": "约130mm",
   "toy_category": "塑料拼装模型",
+  "intro": "单品页简介原文…",
   "image_url": "https://...-w1200h1200",
   "image_file": "images/6371.jpg",
   "fields": { "原始表格字段": "..." }
@@ -183,6 +186,28 @@ imports/78dm/<series-id>/
 - `craft` 从 edition/名称提取单值工艺；不明确留空。
 
 `import_78dm_mg.py` 默认 dry-run，`--apply` 会替换现有 `万代/MG` 和 `万代/MGEX`。
+
+### 摩动核（383484）
+
+`383484` 是「摩动核拼装系列」，44 条原始记录：
+
+```text
+星甲魂将传 超可动拼装 28 / 星甲魂将传 迅勇级 4 / 赤热五星 2
+星甲魂将传 可动Q版系列 8 / 仅CG图参考化商品（暂）2
+```
+
+导入器 `tests/import_78dm_modonghe.py` 是**增量更新**，不删除也不替换：
+
+- `仅CG图参考化商品（暂）` 整段跳过。
+- `可动Q版系列` 只新增 `干将`（`MNPQ-XH04`，line=`可动Q版系列`），其余 7 款暂不处理。
+- 其他产品只匹配更新库内已有产品：先按 78dm 名称前缀的货号，再按名称；个别重号/异名用脚本里的 `MATCH_OVERRIDES`。
+- 78dm 非空值覆盖：`price`（统一成 `199元`）、`release_date`（只有年份按 1 月 1 日，季度按当季首月 1 日）、`product_code`（只补空或修正错号）。
+- 名称、line、渠道、版本、工艺、work、source 保持不动。
+- 单品简介追加进 `detail`：`原备注 + 空行 + “78dm简介：” + 简介`；已含标记则跳过，可重复执行。
+- 默认 dry-run，`--apply` 写入。本次结果：33 条更新 + 1 条新增（共 53 条摩动核产品）。
+
+注意：78dm 的「编号」列会写错（`MNP-XH03E 敖丙 精制版` 被标成 `MNP-XH03`），货号以名称前缀为准；
+`MNP-XH05SW 赵云 威武色` 与库内 `MNP-XH05W` 不一致，按库内值保留。
 
 ## 7. 验证
 
