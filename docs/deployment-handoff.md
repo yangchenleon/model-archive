@@ -37,7 +37,7 @@
 不需要：
 
 - 78dm cookie
-- `imports/78dm` 抓取数据
+- `outputs/78dm` 抓取数据
 - 源主机的 PostgreSQL 数据目录
 - 图片/对象存储配置
 

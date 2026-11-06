@@ -1,15 +1,17 @@
-"""Scrape a 78dm series page into a local JSON manifest and cover images.
+"""Scrape a 78dm series page into a local JSON manifest (optionally with images).
 
 Usage:
     .venv/bin/python tools/scrape_78dm.py \
         --url https://acg.78dm.net/ct/341672.html \
-        --out imports/78dm/341672
+        --out outputs/78dm/341672
+
+By default only metadata is written; pass ``--images`` to also download covers.
 
 The site requires a valid `_identity` cookie. By default it reads `78cookie2`
 from the repository root; the cookie is never written to the output.
 
 This tool deliberately does not import rows into PostgreSQL. It only builds a
-local, reviewable dataset under imports/ (gitignored).
+local, reviewable dataset under outputs/ (gitignored).
 """
 
 from __future__ import annotations
@@ -291,14 +293,20 @@ def main() -> None:
     parser.add_argument("--out", required=True)
     parser.add_argument("--cookie", default=str(ROOT / "78cookie2"))
     parser.add_argument("--limit", type=int, default=0, help="only fetch the first N products")
-    parser.add_argument("--skip-images", action="store_true")
+    parser.add_argument(
+        "--images",
+        action="store_true",
+        help="download cover images (default: metadata only)",
+    )
+    parser.add_argument("--skip-images", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--delay", type=float, default=0.25, help="seconds between product pages")
     args = parser.parse_args()
 
     out_dir = (ROOT / args.out).resolve()
     images_dir = out_dir / "images"
     out_dir.mkdir(parents=True, exist_ok=True)
-    images_dir.mkdir(parents=True, exist_ok=True)
+    if args.images:
+        images_dir.mkdir(parents=True, exist_ok=True)
 
     cookie = load_cookie(Path(args.cookie))
     client = make_client(cookie)
@@ -336,7 +344,7 @@ def main() -> None:
                     product["image_url"] = card.get("card_image", "")
                 if product["image_url"].startswith("//"):
                     product["image_url"] = f"https:{product['image_url']}"
-                if not args.skip_images and product["image_url"]:
+                if args.images and not args.skip_images and product["image_url"]:
                     try:
                         product["image_file"] = download_image(
                             client,

@@ -35,7 +35,7 @@ def list_products(
     release_channel: str | None = None,
     work: str | None = None,
     edition: str | None = None,
-    craft: str | None = None,
+    appearance: str | None = None,
     limit: int = Query(default=100, le=5000),
     session: Session = Depends(get_session),
 ) -> list[Product]:
@@ -61,12 +61,13 @@ def list_products(
         statement = statement.where(Product.work == work)
     if edition:
         statement = statement.where(Product.edition == edition)
-    if craft:
-        statement = statement.where(Product.craft == craft)
+    if appearance:
+        statement = statement.where(Product.appearance == appearance)
     if search:
         term = f"%{search.strip()}%"
         statement = statement.where(or_(
             Product.kit_name.ilike(term),
+            Product.aliases.ilike(term),
             Manufacturer.name.ilike(term),
             ProductLine.name.ilike(term),
             Product.product_code.ilike(term),

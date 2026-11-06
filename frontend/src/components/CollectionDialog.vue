@@ -1,7 +1,6 @@
 <script setup>
 import { reactive, ref, watch } from 'vue'
 import { LoaderCircle, Save, X } from 'lucide-vue-next'
-import { COLLECTION_STATUSES } from '../collectionMeta'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -12,9 +11,6 @@ const emit = defineEmits(['close', 'saved'])
 const form = reactive({
   title: '',
   description: '',
-  status: 'active',
-  started_on: '',
-  target_on: '',
 })
 const busy = ref(false)
 const error = ref('')
@@ -23,9 +19,6 @@ function reset() {
   error.value = ''
   form.title = props.collection?.title || ''
   form.description = props.collection?.description || ''
-  form.status = props.collection?.status || 'active'
-  form.started_on = props.collection?.started_on || ''
-  form.target_on = props.collection?.target_on || ''
 }
 
 watch(
@@ -57,9 +50,6 @@ async function submit() {
       body: JSON.stringify({
         title: form.title.trim(),
         description: valueOrNull(form.description),
-        status: form.status,
-        started_on: form.started_on || null,
-        target_on: form.target_on || null,
       }),
     })
     const body = await response.json().catch(() => ({}))
@@ -89,13 +79,6 @@ async function submit() {
 
         <div class="form-grid">
           <label class="form-field full"><span>名称 <b>*</b></span><input v-model="form.title" required autofocus maxlength="160" placeholder="例如：RG 扎古全制霸" /></label>
-          <label class="form-field"><span>状态</span>
-            <select v-model="form.status">
-              <option v-for="item in COLLECTION_STATUSES" :key="item.value" :value="item.value">{{ item.label }}（{{ item.hint }}）</option>
-            </select>
-          </label>
-          <label class="form-field"><span>开始日期</span><input v-model="form.started_on" type="date" /></label>
-          <label class="form-field"><span>目标日期</span><input v-model="form.target_on" type="date" /></label>
           <label class="form-field full"><span>描述</span><textarea v-model="form.description" rows="4" placeholder="为什么收、只收哪些版本、难度和注意事项都写在这里。"></textarea></label>
         </div>
 

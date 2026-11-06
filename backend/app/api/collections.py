@@ -33,9 +33,6 @@ def _read(collection: Collection, stats: CollectionStats) -> CollectionRead:
         id=collection.id,
         title=collection.title,
         description=collection.description,
-        status=collection.status,
-        started_on=collection.started_on,
-        target_on=collection.target_on,
         created_at=collection.created_at,
         updated_at=collection.updated_at,
         stats=stats,
@@ -64,12 +61,11 @@ def _item(view: service.ItemView) -> CollectionItemRead:
 
 @router.get("/collections", response_model=list[CollectionRead])
 def list_collections(
-    status: str | None = None,
     q: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     session: Session = Depends(get_session),
 ) -> list[CollectionRead]:
-    return [_read(collection, stats) for collection, stats in service.list_with_stats(session, status, q, limit)]
+    return [_read(collection, stats) for collection, stats in service.list_with_stats(session, q, limit)]
 
 
 @router.post("/collections", response_model=CollectionRead, status_code=status.HTTP_201_CREATED)

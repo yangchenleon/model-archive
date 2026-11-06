@@ -13,13 +13,16 @@ import PrintView from './components/PrintView.vue'
 import CollectionsView from './components/CollectionsView.vue'
 import CollectionDetail from './components/CollectionDetail.vue'
 import TaxonomyAdmin from './components/TaxonomyAdmin.vue'
-import { CHANNEL_OPTIONS, CRAFT_OPTIONS, categoryLabel, categoryOrder, channelLabel, craftLabel, fetchManufacturers } from './taxonomy'
+import PaginationBar from './components/PaginationBar.vue'
+import { CHANNEL_OPTIONS, categoryLabel, categoryOrder, channelLabel, appearanceLabel, fetchManufacturers } from './taxonomy'
 
 const SECTIONS = ['directory', 'review', 'admin', 'taxonomy', 'inventory', 'collections', 'labels', 'print', 'wishlist', 'activity']
 const activeSection = ref('directory')
 const collectionId = ref('')
 const directoryMaker = ref('')
 const selectedProduct = ref(null)
+const DIRECTORY_PAGE_SIZE = 50
+const page = ref(1)
 
 function decodeHash(value) {
   try {
@@ -69,7 +72,7 @@ const search = ref('')
 const lineFilter = ref('')
 const channelFilter = ref('')
 const workFilter = ref('')
-const craftFilter = ref('')
+const appearanceFilter = ref('')
 const makerFilter = ref('')
 const view = ref('grid')
 const addDialogOpen = ref(false)
@@ -152,8 +155,8 @@ const productWorks = computed(() => {
     .sort((a, b) => (a.value === 'unknown' ? 1 : b.value === 'unknown' ? -1 : a.label.localeCompare(b.label, 'zh-CN')))
 })
 
-// 工艺是固定枚举，只列当前范围里出现的值
-const productCrafts = computed(() => {
+// 外观按当前结果集里实际出现的值列出
+const productAppearances = computed(() => {
   const sourceList = products.value.filter((item) => {
     if (makerFilter.value && makerName(item) !== makerFilter.value) return false
     if (lineFilter.value && (item.product_line || '未知') !== lineFilter.value) return false
@@ -163,12 +166,14 @@ const productCrafts = computed(() => {
   })
   const counts = new Map()
   for (const item of sourceList) {
-    const key = item.craft || 'unknown'
+    const key = item.appearance || 'unknown'
     counts.set(key, (counts.get(key) || 0) + 1)
   }
-  return [{ value: 'unknown', label: '未知', count: counts.get('unknown') || 0 }]
-    .concat(CRAFT_OPTIONS.filter((craft) => counts.has(craft.value)).map((craft) => ({ ...craft, count: counts.get(craft.value) })))
-    .filter((option) => option.count)
+  return Array.from(counts, ([value, count]) => ({
+    value,
+    label: value === 'unknown' ? '未知' : appearanceLabel(value),
+    count,
+  })).sort((a, b) => (a.value === 'unknown') - (b.value === 'unknown') || b.count - a.count)
 })
 
 // 如果先选系列，再选厂商的话，则产品恢复全局筛选（清空已选系列）
@@ -176,7 +181,7 @@ watch(makerFilter, () => {
   lineFilter.value = ''
   channelFilter.value = ''
   workFilter.value = ''
-  craftFilter.value = ''
+  appearanceFilter.value = ''
 })
 
 watch(lineFilter, () => {
@@ -302,12 +307,14 @@ watch(directoryMaker, (maker) => {
   makerFilter.value = maker && maker !== 'all' ? maker : ''
   lineFilter.value = ''
   search.value = ''
+  page.value = 1
 }, { immediate: true })
 
 watch(activeSection, (section) => {
   if (section === 'directory') {
     loadManufacturers()
     loadProducts()
+    page.value = 1
   }
   if (section === 'directory' && !directoryMaker.value) {
     makerFilter.value = ''
@@ -323,14 +330,14 @@ const filteredProducts = computed(() => {
       const lineName = item.product_line || '未知'
       const channelName = item.release_channel || 'unknown'
       const workName = item.work || 'unknown'
-      const craftName = item.craft || 'unknown'
-      const matchText = !keyword || [item.kit_name, item.manufacturer, item.product_code, lineName, channelLabel(channelName), item.work, item.edition, craftLabel(item.craft)].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
+      const appearanceName = item.appearance || 'unknown'
+      const matchText = !keyword || [item.kit_name, item.aliases, item.manufacturer, item.product_code, lineName, channelLabel(channelName), item.work, item.edition, appearanceLabel(item.appearance)].filter(Boolean).join(' ').toLocaleLowerCase().includes(keyword)
       return matchText
         && (!makerFilter.value || makerName(item) === makerFilter.value)
         && (!lineFilter.value || lineName === lineFilter.value)
         && (!channelFilter.value || channelName === channelFilter.value)
         && (!workFilter.value || workName === workFilter.value)
-        && (!craftFilter.value || craftName === craftFilter.value)
+        && (!appearanceFilter.value || appearanceName === appearanceFilter.value)
     })
     .slice()
     .sort((a, b) => {
@@ -371,6 +378,20 @@ const filteredProducts = computed(() => {
     })
 })
 
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredProducts.value.length / DIRECTORY_PAGE_SIZE)))
+const pagedProducts = computed(() => {
+  const start = (page.value - 1) * DIRECTORY_PAGE_SIZE
+  return filteredProducts.value.slice(start, start + DIRECTORY_PAGE_SIZE)
+})
+
+watch([search, makerFilter, lineFilter, channelFilter, workFilter, appearanceFilter, productSort], () => {
+  page.value = 1
+})
+
+watch(pageCount, (count) => {
+  if (page.value > count) page.value = count
+})
+
 async function loadProducts() {
   loading.value = true
   loadError.value = ''
@@ -390,7 +411,7 @@ function resetFilters() {
   lineFilter.value = ''
   channelFilter.value = ''
   workFilter.value = ''
-  craftFilter.value = ''
+  appearanceFilter.value = ''
   if (!selectedMaker.value) makerFilter.value = ''
 }
 
@@ -543,20 +564,23 @@ onMounted(() => {
             <label class="search-field"><Search :size="18" /><input v-model="search" type="search" :placeholder="selectedMaker ? '搜索当前厂牌的产品' : '搜索产品名、厂商或系列'" /></label>
             <label class="select-field"><Filter :size="16" /><select v-model="channelFilter"><option value="">所有渠道</option><option v-for="channel in productChannels" :key="channel.value" :value="channel.value">{{ channel.label }} {{ channel.count }}</option></select></label>
             <label class="select-field"><Filter :size="16" /><select v-model="workFilter"><option value="">所有作品</option><option v-for="work in productWorks" :key="work.value" :value="work.value">{{ work.label }} {{ work.count }}</option></select></label>
-            <label class="select-field"><Filter :size="16" /><select v-model="craftFilter"><option value="">所有工艺</option><option v-for="craft in productCrafts" :key="craft.value" :value="craft.value">{{ craft.label }} {{ craft.count }}</option></select></label>
+            <label class="select-field"><Filter :size="16" /><select v-model="appearanceFilter"><option value="">所有外观</option><option v-for="appearance in productAppearances" :key="appearance.value" :value="appearance.value">{{ appearance.label }} {{ appearance.count }}</option></select></label>
             <label class="select-field"><Filter :size="16" /><select v-model="productSort"><option value="code">按编号</option><option value="release_date">按发售时间</option><option value="name">按名称</option></select></label>
             <template v-if="!selectedMaker">
               <label class="select-field"><Building2 :size="16" /><select v-model="makerFilter"><option value="">所有厂商</option><option v-for="maker in makers" :key="maker" :value="maker">{{ maker }}</option></select></label>
               <label class="select-field"><Filter :size="16" /><select v-model="lineFilter"><option value="">所有系列</option><option v-for="line in productLines" :key="line" :value="line">{{ line }}</option></select></label>
             </template>
-            <button v-if="search || lineFilter || channelFilter || workFilter || craftFilter || (!selectedMaker && makerFilter)" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
+            <button v-if="search || lineFilter || channelFilter || workFilter || appearanceFilter || (!selectedMaker && makerFilter)" class="reset-button" type="button" @click="resetFilters"><X :size="15" />清除</button>
             <span class="result-count">{{ filteredProducts.length }} 项</span>
             <div class="view-switch" aria-label="视图方式"><button :class="{ selected: view === 'grid' }" type="button" aria-label="网格视图" title="网格视图" @click="view = 'grid'"><Grid2X2 :size="17" /></button><button :class="{ selected: view === 'list' }" type="button" aria-label="列表视图" title="列表视图" @click="view = 'list'"><List :size="18" /></button></div>
           </section>
 
           <section v-if="loading" class="state-panel"><LoaderCircle class="spin" :size="26" /><p>正在读取产品目录...</p></section>
           <section v-else-if="loadError" class="state-panel error-state"><p>{{ loadError }}</p><button class="secondary-button" type="button" @click="loadProducts"><RefreshCw :size="16" />重新加载</button></section>
-          <section v-else-if="filteredProducts.length" class="products" :class="`view-${view}`"><ProductCard v-for="product in filteredProducts" :key="product.id" :product="product" :view="view" :owned="ownedByProduct.get(product.id) || 0" @select="selectedProduct = $event" @own="ownProduct" /></section>
+          <template v-else-if="filteredProducts.length">
+            <section class="products" :class="`view-${view}`"><ProductCard v-for="product in pagedProducts" :key="product.id" :product="product" :view="view" :owned="ownedByProduct.get(product.id) || 0" @select="selectedProduct = $event" @own="ownProduct" /></section>
+            <PaginationBar :page="page" :page-count="pageCount" :total="filteredProducts.length" @update:page="page = $event" />
+          </template>
           <section v-else class="state-panel"><p>没有符合条件的产品。</p><button class="secondary-button" type="button" @click="resetFilters">清除筛选</button></section>
         </template>
       </section>

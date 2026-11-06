@@ -99,14 +99,14 @@ def build_detail(product: dict, image_file: str) -> str:
         ("规格", product.get("specification", "")),
         ("玩具分类", product.get("toy_category", "")),
         ("来源分类", product.get("source_category", "")),
-        ("封面", f"imports/78dm/341672/{image_file}" if image_file else ""),
+        ("封面", f"outputs/78dm/341672/{image_file}" if image_file else ""),
     ]
     return "\n".join(f"{key}: {value}" for key, value in lines if value)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--manifest", default="imports/78dm/341672/products.json")
+    parser.add_argument("--manifest", default="outputs/78dm/341672/products.json")
     parser.add_argument("--manufacturer", default="万代")
     parser.add_argument("--line", default="RG")
     parser.add_argument("--apply", action="store_true")

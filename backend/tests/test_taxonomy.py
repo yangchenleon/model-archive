@@ -367,21 +367,21 @@ def test_product_code_is_preserved_and_release_date_is_kept(client):
     assert updated.json()["product_code"] == "RG02"
 
 
-def test_edition_craft_and_extended_channels(client):
+def test_edition_appearance_and_extended_channels(client):
     maker = make_manufacturer(client, "版本厂")
     product = make_product(
         client,
         maker["id"],
         "版本机体",
         edition="Bilibili ver",
-        craft="clear",
+        appearance="彩透",
         release_channel="event",
     )
     assert product["edition"] == "Bilibili ver"
-    assert product["craft"] == "clear"
+    assert product["appearance"] == "彩透"
     assert product["release_channel"] == "event"
 
-    for channel in ("base", "lottery"):
+    for channel in ("base", "event"):
         moved = client.patch(
             f"/api/v1/products/{product['id']}",
             json={"release_channel": channel},
@@ -393,14 +393,21 @@ def test_edition_craft_and_extended_channels(client):
         f"/api/v1/products/{product['id']}",
         json={"release_channel": "other"},
     ).status_code == 422
+    # appearance 是自由文本，允许自定义值
+    custom = client.patch(
+        f"/api/v1/products/{product['id']}",
+        json={"appearance": "自定义外观"},
+    )
+    assert custom.status_code == 200
+    assert custom.json()["appearance"] == "自定义外观"
     assert client.patch(
         f"/api/v1/products/{product['id']}",
-        json={"craft": "not-a-craft"},
-    ).status_code == 422
+        json={"appearance": "彩透"},
+    ).status_code == 200
 
     rows = client.get(
         "/api/v1/products",
-        params={"edition": "Bilibili ver", "craft": "clear", "search": "版本机体"},
+        params={"edition": "Bilibili ver", "appearance": "彩透", "search": "版本机体"},
     ).json()
     assert [row["id"] for row in rows] == [product["id"]]
 

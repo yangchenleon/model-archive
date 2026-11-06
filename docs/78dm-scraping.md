@@ -7,16 +7,15 @@
 前提：仓库根目录有可用的 78dm `_identity` cookie（本地文件 `78cookie2`，已 gitignore；不要提交）。
 
 ```bash
-# 1) 抓产品元数据到本地（不写数据库）
+# 1) 抓产品元数据到本地（不写数据库；默认不下载封面）
 .venv/bin/python tools/scrape_78dm.py \
   --url https://acg.78dm.net/ct/341672.html \
-  --out imports/78dm/341672 \
-  --delay 0.15 \
-  --skip-images
+  --out outputs/78dm/341672 \
+  --delay 0.15
 
-# 2) 并发下载/续传封面
+# 2) 需要封面时再单独并发下载/续传
 .venv/bin/python tools/download_78dm_images.py \
-  --dir imports/78dm/341672 --workers 8
+  --dir outputs/78dm/341672 --workers 8
 
 # 3) 预览导入（不修改数据库）
 .venv/bin/python tests/import_78dm_rg.py
@@ -32,7 +31,7 @@
 ```bash
 .venv/bin/python tools/scrape_78dm.py \
   --url https://acg.78dm.net/ct/2328.html \
-  --out imports/78dm/2328 --skip-images
+  --out outputs/78dm/2328
 
 .venv/bin/python tests/import_78dm_mg.py           # dry run
 .venv/bin/python tests/import_78dm_mg.py --apply   # replace MG/MGEX
@@ -48,14 +47,14 @@
 - `78cookie3` 的 CORS cookie 单独不可用。
 - 不带 cookie 时 78dm 返回 404。
 - cookie 会过期（本次约 2026-11-05）；过期后重新从浏览器导出，不要写进代码或文档。
-- `.gitignore` 已包含 `78cookie*`；`imports/` 也不进 git。
+- `.gitignore` 已包含 `78cookie*`；`outputs/` 也不进 git。
 
 ## 3. 目录结构
 
 ```text
 78cookie2                  # 本地 cookie，gitignored
 tools/
-  scrape_78dm.py           # 系列页 -> products.json + 可选封面
+  scrape_78dm.py           # 系列页 -> products.json（默认不抓封面）
   download_78dm_images.py  # 根据 products.json 并发下载封面
 tests/
   import_78dm_rg.py        # 将 RG manifest 替换进 PostgreSQL（一次性任务）
@@ -66,14 +65,16 @@ tests/
   import_78dm_snaa.py      # SNAA manifest 增量更新（一次性任务）
   import_78dm_idas.py      # 伊达斯科技 manifest 增量更新（一次性任务）
   import_78dm_batch.py     # 五系列批量 upsert（2026-11，一次性任务）
+  import_78dm_blokees.py   # 布鲁可 传奇版导入（一次性任务）
+  import_78dm_new_mfgs.py  # 壹理创玩/创模玩/所罗门/圣斯基/御模道导入（一次性任务）
   seed_review_queue.py     # 审核队列一次性种子
-imports/78dm/<series-id>/
+outputs/78dm/<series-id>/
   series.json              # 系列信息、子分类、产品 URL 列表
   products.json            # 产品字段 + 本地封面相对路径
   images/<ct-id>.jpg|png|webp
 ```
 
-`imports/` 是抓取产物，不进仓库。
+`outputs/` 是抓取产物，不进仓库。
 
 ## 4. 抓取器做了什么
 
@@ -89,8 +90,8 @@ imports/78dm/<series-id>/
    - 厂商、系列、级别或分类、价格、名称、版本、编号
    - 发售时间、比例、人物名、材料种类、规格、玩具分类
    - `#introduction` 简介块（`intro` 字段，段落转成换行）
-5. 抓封面：单品页 `showImage(..., w1200h1200)` 优先；详情页大图兜底。
-6. 写 `series.json`、`products.json`；可选下载封面。
+5. 只在显式传 `--images` 时抓封面：单品页 `showImage(..., w1200h1200)` 优先；详情页大图兜底。
+6. 写 `series.json`、`products.json`；默认只落元数据。
 
 支持参数：
 
@@ -99,7 +100,7 @@ imports/78dm/<series-id>/
 --out DIR           # 必填，相对仓库根目录
 --cookie PATH       # 默认 78cookie2
 --limit N           # 只抓前 N 个，调试用
---skip-images       # 先只抓元数据（推荐）
+--images            # 同时下载封面；默认关闭
 --delay SECONDS     # 单品页间隔，默认 0.25
 ```
 
@@ -180,7 +181,7 @@ imports/78dm/<series-id>/
 - `line=MG`，`EXtreme` 单独 `line=MGEX`。
 - `普通版` → `regular` + `edition=普通版`；`网络限定版` → `pb`。
 - `其他限定版` / HD配色 / 官方豪华/特别 / 限定透明/电镀 / 水晶 / 彩色电镀 / 限量涂装 / 特殊武器配件 → `limited`。
-- `一番赏` → `lottery`；`高达30周年透明配件版` / `竞赛奖品版` → `event`。
+- `一番赏` → `limited`，并在 `edition` 记 `一番赏`；`高达30周年透明配件版` / `竞赛奖品版` → `event`。
 - 重力战线、一年战争 → `limited` + `work`；圣战士丹拜因、机动警察 → `regular` + `work`。
 - 特殊武器配件：`edition=配件包`。
 - 官方豪华版/特别版：`edition=豪华版/特别版`。
@@ -188,9 +189,13 @@ imports/78dm/<series-id>/
 - `往期未商品化参考出品` 15 条不入库。
 - 普通版的 edition 固定为 `普通版`；万代未标注的 work 固定为 `高达`。
 - 同名不同版本：保留普通版原名，其他加 `（edition/分类）` 后缀，保证产品名唯一。
-- `craft` 从 edition/名称提取单值工艺；不明确留空。
+- `appearance` 从 edition/名称提取外观标签（彩透 / 电镀 / 特殊涂层 / 未启动…）；不明确留空。
 
 `import_78dm_mg.py` 默认 dry-run，`--apply` 会替换现有 `万代/MG` 和 `万代/MGEX`。
+
+> **重新同步前必读**：展示名已经是人工标准化结果（`name（ver）[外观]`），和 78dm 的「名称」通常对不上。
+> 重新同步时必须按 `products.aliases` 反查产品，**不能用 `kit_name` 匹配**，否则每个改过名的产品都会新建一份。
+> 写入时把 78dm 名称补进 `aliases`（分号分隔），保持可回溯。
 
 ### 摩动核（383484）
 
@@ -207,7 +212,7 @@ imports/78dm/<series-id>/
 - `可动Q版系列` 只新增 `干将`（`MNPQ-XH04`，line=`可动Q版系列`），其余 7 款暂不处理。
 - 其他产品只匹配更新库内已有产品：先按 78dm 名称前缀的货号，再按名称；个别重号/异名用脚本里的 `MATCH_OVERRIDES`。
 - 78dm 非空值覆盖：`price`（统一成 `199元`）、`release_date`（只有年份按 1 月 1 日，季度按当季首月 1 日）、`product_code`（只补空或修正错号）。
-- 名称、line、渠道、版本、工艺、work、source 保持不动。
+- 名称、line、渠道、版本、外观、work、source 保持不动。
 - 单品简介追加进 `detail`：`原备注 + 空行 + “78dm简介：” + 简介`；已含标记则跳过，可重复执行。
 - 默认 dry-run，`--apply` 写入。本次结果：33 条更新 + 1 条新增（共 53 条摩动核产品）。
 
@@ -290,6 +295,133 @@ imports/78dm/<series-id>/
 - `detail` 追加简介（阿斯加德、瓦尔基里、诺姆警用型有简介）。
 - 结果：12 条全部更新，价格 12/12，日期 11/12；二次 dry-run 为 0 变更。
 
+### 布鲁可 传奇版（418951 / 437487 / 448287 / 437633）
+
+四个 78dm 系列页只取「传奇版」家族，共 45 条，落盘到
+`outputs/78dm/blokees-legendary/`（`products.json` + 45 张封面）：
+
+| 78dm 系列 | 取的范围 | 条数 |
+| --- | --- | ---: |
+| 418951 布鲁可变形金刚系列 | 传奇版 | 11 |
+| 437487 布鲁可奥特曼系列 | 传奇版 14 + 传奇金选 2 + 限量产品里的传奇版 2 | 18 |
+| 448287 布鲁可日系IP授权系列 | 新世纪福音战士 9 + 火影忍者 1（均为传奇版） | 10 |
+| 437633 布鲁可假面骑士系列 | 传奇版Lite 4 + 传奇版EP拓展包 2 | 6 |
+
+导入器 `tests/import_78dm_blokees.py`，默认 dry-run，`--apply` 写入：
+
+```bash
+.venv/bin/python tests/import_78dm_blokees.py          # 预览
+.venv/bin/python tests/import_78dm_blokees.py --apply  # 写入
+```
+
+口径：
+
+- `line` / `work` 按 IP：`变形金刚`、`奥特曼`、`新世纪福音战士`、`火影忍者`、`假面骑士`。
+- 展示名去掉 `传奇版 ` / `传奇金选 ` 前缀（如 `传奇版 初号机` → `初号机`）；78dm 原名写进 `aliases`。
+- `edition`：`传奇版` / `传奇金选` / `传奇版Lite` / `传奇版配件包`（EP拓展包）。
+- `release_channel`：`普通版` → `regular`；`抽选版`、联名限定 → `limited`。
+- `detail` 保留 78dm URL、原名、版本、发售时间、人物名、材料、规格、玩具分类、来源分类、封面路径和简介。
+- 已有 3 条视频来源记录（`奥特之王`、`新世纪福音战士TV版二号机`、`甲斗`）按页面 id 精确匹配：
+  只补空字段（line/work/edition/渠道/价格/日期）并追加 78dm 信息，不改展示名。
+- 结果：3 条更新 + 42 条新增；二次 dry-run 为 0 变更。
+
+### 新增厂商：壹理创玩 / 创模玩 / 所罗门模玩 / 圣斯基 / 御模道（2026-11）
+
+用户给的 5 个入口：`410001`、`409627`、`354595`、`426311`、`124640`（御模道品牌页）。
+抓取 140 条原始记录，按「拼装 + 已发售」口径保留 116 条：
+
+- 去掉未发售/未商品化 19 条：壹理的山竹尊/青梅尊/神兵小将/百变机兽/宇宙星神未定档款和 Q4 2026 款；
+  圣斯基的变形金刚3 威震天/擎天柱、Q4 红莲螺岩；御模道的 4 条卫星/暂未商品化和 Q4 流云仙子。
+- 去掉非拼装 5 条：御模道特摄成品 4 条 + LABX 机甲成品 1 条。
+- 保留：壹理创玩 24、创模玩 11、所罗门模玩 3、圣斯基 13、御模道 65。
+- 补充：圣斯基 `嘻哈达克` 78dm 原页没有发售时间，按用户提供的 `2025年06月` 入库（其余字段照 78dm）。
+
+`tests/import_78dm_new_mfgs.py` 默认 dry-run，`--apply` 写入。重复执行为 0 变更。
+
+**系列（line/work）按 IP 重新编排**，不直接照搬 78dm 的「级别或分类」：
+
+| 厂商 | line / work |
+| --- | --- |
+| 壹理创玩 | 果宝特攻、果宝特攻 QROBO、超兽武装、宇宙星神 |
+| 创模玩 | 魔动王/光能使者、古立特、铁臂阿童木、魔神凯撒、新世纪福音战士 |
+| 所罗门模玩 | 拼装机甲 |
+| 圣斯基 | B. Duck、变形金刚、初音未来、新世纪福音战士 |
+| 御模道 | 机动奥特曼、A.T.K.GIRL、漫威、洛克人 |
+
+**渠道**：
+
+- 普通版 → `regular`
+- 网络限定/PB → `pb`（本批没有）
+- WF / ChinaJoy / 会场 / 展会 → `event`
+- 其他限定 / 限量 / 抽选 / 联名 / 海外限定 → `limited`
+
+结果：入库 116 条（含圣斯基端盒 1 条）。已有 1 条视频来源的
+`创模玩 / 魔神凯撒（彩透版）` 按 78dm 补充 line、渠道、价格、日期和详情，展示名不改；
+圣斯基已有的 `天元突破:红莲螺岩` 保留不动（78dm 对应条目按未发售排除）。
+
+拆盒：`tests/split_eva_blindbox.py` 把圣斯基 `EVA 超可动拼装盲盒端` 按官方配置拆成 7 款：
+
+```text
+初号机 / 零号机 / 二号机 / Mark.06 / 八号机 / 第四使徒 / 初号机觉醒（隐藏款）
+```
+
+官方页面写明整盒 6 只、全套 7 款（隐藏款替换初号机）；`--apply` 会删除端盒、插入 7 条，
+圣斯基净增 6 条（当前 20 条），这批厂商合计 123 条（含圣斯基原有 1 条），
+渠道变为 `regular` 95 + `limited` 17 + `event` 10。
+
+### 万象聚变 TMS（409521）/ GM-GODOMO（444603）（2026-11）
+
+`409521` 是「万象聚变拼装系列」，全部归入 `TMS系列`，`天启` 是第一款；78dm 抓取 6 条。
+2024/2025 各补一款会场版，其中「彩透」和「磨砂透明/机械透明」是同一款，各只保留一条：
+
+| 款式 | 价格 | 发售 | 渠道 | 说明 |
+| --- | ---: | --- | --- | --- |
+| 天启 彩透版（WF2024） | 336 元 | 2024-10 | event | 同 2024 磨砂透明版 |
+| 天启 彩透版（WF2025） | 336 元 | 2025-10-02 | event | 同 2025 机械透明版 |
+
+WF2025 彩透版参考 Naver 评测（上海 WF 限定 200 体、336 元）。78dm 原有的 `天启`、
+`天启 黑金版`、`天启 彩透版`（WF2024）、`天启 凤凰配件包`、`流星`、`流星 彩透版`（WF2026）
+全部保留；另加 `天启 彩透版（WF2025）`。
+
+`444603` 是「GM-GODOMO 拼装机甲模型系列」，DB 已有同品牌 `GM模型`，因此并入 `GM模型`
+（line=`拼装机甲`），不新建重复厂商：
+
+- 新增 `日曜`、`日曜 全息影像`（2025WF，event）、`日曜 异色版`、`月渎`；
+- `月渎 全息影像版` 合并到已有 `月渎（全息幻影）`，名称保留，补价格/日期/系列；
+- 已有的 `不死鸟`、`夜幕`、`月渎（高机动背包空装样式）` 不动。
+
+`tests/import_78dm_tms.py` 默认 dry-run，`--apply` 写入；初始 2 条更新 + 12 条新增。
+随后 2024/2025 的彩透与磨砂/机械透明合并，净删 2 条，万象聚变当前 7 条、GM模型 8 条。
+
+### 哮星 HowlingStar 机神（手工补录，2026-11）
+
+哮星的三款「机神」拼装产品，统一 `line=机神`：
+
+| 产品 | 价格 | 发售 | 尺寸 | work |
+| --- | --- | --- | --- | --- |
+| 机神·星云 NEBULA | 298 元 | 2023-03 | 全高约 23cm | 交错核心 |
+| 科拉达 COLADA | 299 元（预定）/339 元（现货） | 2026-06 | 全高约 35cm，全装备长 50cm | 交错战线 |
+| 仲裁者 Arbiter | 188 元 | 2026-12（预计到货） | 全高约 20cm | 交错战线 |
+
+- 来源：拆盒网产品页 `271657`（星云）、`360329`（科拉达）、`378948`（仲裁者）；
+  科拉达另有 78dm 页 `439156`。仲裁者原视频条目按名称合并，补编号 `CZ-09B`。
+- `tests/import_xiaoxing.py` 默认 dry-run，`--apply` 写入；结果 1 条更新 + 2 条新增，
+  二次 dry-run 为 0 变更。
+
+### 迪雷克模玩 1/100（440022，2026-11）
+
+`440022` 是「迪雷克模玩 拼装系列」，共 3 款，统一 `line=1/100`、`work=原创`：
+
+| 产品 | 编号 | 价格 | 发售 |
+| --- | --- | ---: | --- |
+| 斑鸠 | ZAW-S01 | 199 元 | 2026-01 |
+| 翠鸟 | ZAW-S02 | 199 元 | 2026-11 |
+| 孔雀 | ZAW-S03 | 未标 | 未标（灰模/未定档） |
+
+- 原有视频来源的 `翠鸟` 按名称合并，补齐编号、价格、发售时间、详情和别名，展示名不改。
+- `孔雀` 78dm 只有条目，没有价格和发售时间，保持 NULL。
+- `tests/import_78dm_dileike.py` 默认 dry-run，`--apply` 写入；结果 1 条更新 + 2 条新增，二次 dry-run 为 0 变更。
+
 ### 五系列批量（2026-11）
 
 `tests/import_78dm_batch.py` 一次处理五个系列，口径：
@@ -347,7 +479,7 @@ EVANGELION 14 / 勇者王 3 / 机动警察 1 / 参考出品 3
 | --- | --- |
 | 404 / 页面没有找到 | cookie 缺失或过期；换 `78cookie2`/重新导出 |
 | 子分类产品数不对 | 不要只解析主系列页；抓每个子分类 URL |
-| 图片下载慢/失败 | 先 `--skip-images` 抓元数据，再用并发下载器；可重跑续传 |
+| 图片下载慢/失败 | 默认不下载图片；需要时用 `--images`，或单独跑并发下载器；可重跑续传 |
 | 导入后 RG 数量不对 | 检查 manifest 是否为 235、是否误用了别的 series |
 | 导入报 FK/资产引用 | 当前 RG 有资产或收藏集引用；先迁移，不要删 |
 | 编号/日期缺失 | 源页为空；不要自动编造，按本文的 override 规则处理并留注释 |
@@ -356,7 +488,7 @@ EVANGELION 14 / 勇者王 3 / 机动警察 1 / 参考出品 3
 
 抓取器是通用的；导入器目前只支持 `万代 / RG`。新增系列时：
 
-1. 用 `scrape_78dm.py` 抓新 URL 到新的 `imports/78dm/<id>/`；
+1. 用 `scrape_78dm.py` 抓新 URL 到新的 `outputs/78dm/<id>/`；
 2. 检查 `products.json` 的 `line/work/channel` 是否符合预期；
 3. 复制/修改 `import_78dm_rg.py` 的厂家、line、work 映射和数量断言；
 4. 先 dry-run，再 `--apply`；

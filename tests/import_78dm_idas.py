@@ -109,7 +109,7 @@ def append_intro(detail: str | None, intro: str) -> str | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--manifest", default="imports/78dm/410079/products.json")
+    parser.add_argument("--manifest", default="outputs/78dm/410079/products.json")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
 

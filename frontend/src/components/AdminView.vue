@@ -1,11 +1,12 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import {
   ArrowDown, ArrowUp, ChevronDown, Download, LoaderCircle, Pencil, Plus, RefreshCw, Save, Search, Trash2, X,
 } from 'lucide-vue-next'
 import ManufacturerPicker from './ManufacturerPicker.vue'
+import PaginationBar from './PaginationBar.vue'
 import { createTapGuard } from '../tapGuard'
-import { CHANNEL_OPTIONS, CRAFT_OPTIONS, channelLabel, craftLabel } from '../taxonomy'
+import { CHANNEL_OPTIONS, APPEARANCE_OPTIONS, channelLabel, appearanceLabel } from '../taxonomy'
 
 const SORT_FIELDS = [
   { key: 'manufacturer', label: '厂商' },
@@ -15,7 +16,7 @@ const SORT_FIELDS = [
   { key: 'work', label: '作品' },
   { key: 'release_channel', label: '渠道' },
   { key: 'edition', label: '版本' },
-  { key: 'craft', label: '工艺' },
+  { key: 'appearance', label: '外观' },
   { key: 'price', label: '价格' },
   { key: 'release_date', label: '发售时间' },
 ]
@@ -37,7 +38,9 @@ const sortDirection = ref('asc')
 const selectedIds = ref(new Set())
 const bulkChannel = ref('')
 const bulkApplying = ref(false)
-const allVisibleSelected = computed(() => filtered.value.length > 0 && filtered.value.every((product) => selectedIds.value.has(product.id)))
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200]
+const pageSize = ref(50)
+const page = ref(1)
 
 const editorMode = ref(null) // 'create' | 'edit'
 const editing = ref(null)
@@ -45,7 +48,7 @@ const detailProduct = ref(null)
 const audit = ref([])
 const auditLoading = ref(false)
 const form = reactive({
-  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', craft: '', release_date: '', price: '', source: '', detail: '',
+  kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', appearance: '', aliases: '', release_date: '', price: '', source: '', detail: '',
 })
 
 const filtered = computed(() => {
@@ -55,7 +58,7 @@ const filtered = computed(() => {
     : products.value
   if (term) {
     rows = rows.filter((product) =>
-      [product.kit_name, product.manufacturer, product.product_code, product.product_line, product.work, product.edition, craftLabel(product.craft), channelLabel(product.release_channel), product.price]
+      [product.kit_name, product.aliases, product.manufacturer, product.product_code, product.product_line, product.work, product.edition, appearanceLabel(product.appearance), channelLabel(product.release_channel), product.price]
         .filter(Boolean).join(' ').toLowerCase().includes(term))
   }
   const direction = sortDirection.value === 'asc' ? 1 : -1
@@ -65,6 +68,21 @@ const filtered = computed(() => {
     const result = String(left).localeCompare(String(right), 'zh-CN', { numeric: true, sensitivity: 'base' })
     return result * direction
   })
+})
+
+const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
+const paged = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+const allVisibleSelected = computed(() => paged.value.length > 0 && paged.value.every((product) => selectedIds.value.has(product.id)))
+
+watch([search, manufacturerFilter, sortKey, sortDirection, pageSize], () => {
+  page.value = 1
+})
+
+watch(pageCount, (count) => {
+  if (page.value > count) page.value = count
 })
 
 async function api(path, options = {}) {
@@ -89,6 +107,7 @@ async function loadProducts() {
   try {
     products.value = await api('/api/v1/products?limit=5000')
     selectedIds.value = new Set()
+    page.value = 1
   } catch (exc) {
     error.value = `产品读取失败：${exc.message}`
   } finally {
@@ -137,7 +156,7 @@ function sortBy(key) {
 
 function toggleAllVisible(event) {
   selectedIds.value = event.target.checked
-    ? new Set(filtered.value.map((product) => product.id))
+    ? new Set(paged.value.map((product) => product.id))
     : new Set()
 }
 
@@ -177,7 +196,7 @@ async function applyBulkChannel() {
 
 function resetForm() {
   Object.assign(form, {
-    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', craft: '', release_date: '',
+    kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', appearance: '', aliases: '', release_date: '',
     price: '', source: '手动录入', detail: '',
   })
   lines.value = []
@@ -224,7 +243,8 @@ async function openEdit(product) {
     work: fresh.work || '',
     release_channel: fresh.release_channel || '',
     edition: fresh.edition || '',
-    craft: fresh.craft || '',
+    appearance: fresh.appearance || '',
+    aliases: fresh.aliases || '',
     release_date: fresh.release_date || '',
     price: fresh.price || '',
     source: fresh.source || '',
@@ -262,7 +282,8 @@ function payload() {
     work: nullIfEmpty(form.work),
     release_channel: form.release_channel || null,
     edition: nullIfEmpty(form.edition),
-    craft: form.craft || null,
+    appearance: form.appearance || null,
+    aliases: nullIfEmpty(form.aliases),
     release_date: form.release_date || null,
     price: nullIfEmpty(form.price),
     source: form.source.trim(),
@@ -323,13 +344,13 @@ async function removeProduct() {
 }
 
 function exportCsv() {
-  const headers = ['厂商', '产品编号', '系列', '作品', '渠道', '版本', '工艺', '模型名称', '价格', '发售时间', '资料来源', '详情', 'id']
+  const headers = ['厂商', '产品编号', '系列', '作品', '渠道', '版本', '外观', '模型名称', '价格', '发售时间', '资料来源', '详情', 'id']
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
   const lines = [headers.join(',')]
   for (const product of filtered.value) {
     lines.push([
       product.manufacturer, product.product_code, product.product_line, product.work, channelLabel(product.release_channel),
-      product.edition, craftLabel(product.craft), product.kit_name, product.price, product.release_date,
+      product.edition, appearanceLabel(product.appearance), product.kit_name, product.price, product.release_date,
       product.source, product.detail, product.id,
     ].map(escape).join(','))
   }
@@ -399,7 +420,7 @@ loadProducts()
       <table class="admin-table">
         <thead>
           <tr>
-            <th class="check-cell"><input type="checkbox" :checked="allVisibleSelected" aria-label="全选当前筛选结果" @change="toggleAllVisible" /></th>
+            <th class="check-cell"><input type="checkbox" :checked="allVisibleSelected" aria-label="全选当前页" @change="toggleAllVisible" /></th>
             <th v-for="field in SORT_FIELDS" :key="field.key" @click="sortBy(field.key)">
               <span class="th-inner">
                 {{ field.label }}
@@ -413,7 +434,7 @@ loadProducts()
         </thead>
         <tbody>
           <tr
-            v-for="product in filtered"
+            v-for="product in paged"
             :key="product.id"
             @pointerdown="rowGuard.pointerdown"
             @pointermove="rowGuard.pointermove"
@@ -428,7 +449,7 @@ loadProducts()
             <td>{{ product.work || '—' }}</td>
             <td>{{ channelLabel(product.release_channel) }}</td>
             <td>{{ product.edition || '—' }}</td>
-            <td>{{ craftLabel(product.craft) }}</td>
+            <td>{{ appearanceLabel(product.appearance) }}</td>
             <td class="price">{{ product.price || '—' }}</td>
             <td class="date">{{ product.release_date || '—' }}</td>
             <td class="row-actions"><button class="icon-button" type="button" aria-label="编辑" @click.stop="openEdit(product)"><Pencil :size="15" /></button></td>
@@ -437,6 +458,16 @@ loadProducts()
       </table>
       <p v-if="!filtered.length" class="empty-state">没有匹配的产品。</p>
     </section>
+
+    <PaginationBar
+      :page="page"
+      :page-count="pageCount"
+      :total="filtered.length"
+      :page-size="pageSize"
+      :page-size-options="PAGE_SIZE_OPTIONS"
+      @update:page="page = $event"
+      @update:page-size="pageSize = $event"
+    />
 
     <Transition name="dialog">
       <div v-if="detailProduct || editorMode" class="dialog-layer">
@@ -459,7 +490,8 @@ loadProducts()
               <div><dt>作品</dt><dd>{{ detailProduct.work || '—' }}</dd></div>
               <div><dt>渠道</dt><dd>{{ channelLabel(detailProduct.release_channel) }}</dd></div>
               <div><dt>版本</dt><dd>{{ detailProduct.edition || '—' }}</dd></div>
-              <div><dt>工艺</dt><dd>{{ craftLabel(detailProduct.craft) }}</dd></div>
+              <div><dt>外观</dt><dd>{{ appearanceLabel(detailProduct.appearance) }}</dd></div>
+              <div><dt>别名</dt><dd>{{ detailProduct.aliases || '—' }}</dd></div>
               <div><dt>价格</dt><dd>{{ detailProduct.price || '—' }}</dd></div>
               <div><dt>发售时间</dt><dd>{{ detailProduct.release_date || '—' }}</dd></div>
               <div class="full"><dt>资料来源</dt><dd class="detail-text">{{ detailProduct.source || '—' }}</dd></div>
@@ -492,12 +524,13 @@ loadProducts()
               </label>
               <label><span>作品 / IP</span><input v-model="form.work" placeholder="例如：EVANGELION / 勇者王 / SEED" /></label>
               <label><span>版本 / edition</span><input v-model="form.edition" placeholder="官方标注：彩透ver / 豪华版 / Bilibili ver" /></label>
-              <label><span>工艺</span>
-                <select v-model="form.craft">
-                  <option value="">未知/无</option>
-                  <option v-for="craft in CRAFT_OPTIONS" :key="craft.value" :value="craft.value">{{ craft.label }}</option>
-                </select>
+              <label><span>外观</span>
+                <input v-model="form.appearance" list="appearance-values-admin" placeholder="彩透 / 电镀 / 特殊涂层 / 未启动 …" />
+                <datalist id="appearance-values-admin">
+                  <option v-for="appearance in APPEARANCE_OPTIONS" :key="appearance.value" :value="appearance.value" />
+                </datalist>
               </label>
+              <label><span>别名</span><input v-model="form.aliases" placeholder="来源原名，多条用分号分隔" /></label>
               <label><span>渠道</span>
                 <select v-model="form.release_channel">
                   <option value="">未知</option>

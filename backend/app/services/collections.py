@@ -26,7 +26,6 @@ from app.schemas import (
 )
 from app.services.errors import Conflict, Invalid, NotFound
 
-STATUSES = ("planning", "active", "paused", "abandoned")
 BULK_LIMIT = 500
 
 
@@ -43,12 +42,6 @@ class ItemView:
     item: CollectionItem
     product: Product
     roll: AssetRollup
-
-
-def ensure_status(status: str) -> str:
-    if status not in STATUSES:
-        raise Invalid(f"status 必须是 {list(STATUSES)} 之一")
-    return status
 
 
 def require(session: Session, collection_id: UUID) -> Collection:
@@ -156,14 +149,10 @@ def stats_map(session: Session, collection_ids: list[UUID]) -> dict[UUID, Collec
 
 def list_with_stats(
     session: Session,
-    status: str | None = None,
     q: str | None = None,
     limit: int = 100,
 ) -> list[tuple[Collection, CollectionStats]]:
     statement = select(Collection).order_by(Collection.updated_at.desc(), Collection.title).limit(limit)
-    if status and status != "all":
-        ensure_status(status)
-        statement = statement.where(Collection.status == status)
     if q and q.strip():
         term = f"%{q.strip()}%"
         statement = statement.where(or_(
@@ -184,15 +173,11 @@ def create(session: Session, payload: CollectionCreate) -> Collection:
     title = payload.title.strip()
     if not title:
         raise Invalid("收藏集名称不能为空")
-    ensure_status(payload.status)
     _unique_title(session, title)
 
     collection = Collection(
         title=title,
         description=_clean_text(payload.description),
-        status=payload.status,
-        started_on=payload.started_on,
-        target_on=payload.target_on,
     )
     session.add(collection)
     session.commit()
@@ -210,15 +195,8 @@ def update(session: Session, collection_id: UUID, payload: CollectionUpdate) -> 
             raise Invalid("收藏集名称不能为空")
         _unique_title(session, title, exclude_id=collection.id)
         collection.title = title
-    if "status" in data:
-        ensure_status(data["status"])
-        collection.status = data["status"]
     if "description" in data:
         collection.description = _clean_text(data["description"])
-    if "started_on" in data:
-        collection.started_on = data["started_on"]
-    if "target_on" in data:
-        collection.target_on = data["target_on"]
 
     _touch(collection)
     session.commit()

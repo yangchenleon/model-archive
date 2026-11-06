@@ -23,13 +23,14 @@
 | `manufacturer_id` | → `manufacturers`，必填；产品身份的一半。 |
 | `product_line_id` | → `product_lines`，可空；空 = 未知。系列不参与身份。 |
 | `work` | 可空作品/IP，例如 `EVANGELION`、`勇者王`、`机动警察`、`SEED`；不是 line，不参与查重。 |
-| `release_channel` | 发售渠道：`regular / pb / base / event / lottery / limited`，空 = 未知。只是过滤属性，不参与查重。 |
-| `edition` | 官方版本标注（彩透ver / 豪华版 / Bilibili ver…），可空；不参与查重。 |
-| `craft` | 单一常用工艺：彩透/透明/电镀/电镀透明/彩色电镀/珍珠/金属/涂层/消光/水晶/夜光；空 = 无/未知。 |
+| `release_channel` | 发售渠道：`regular / pb / base / event / limited`，空 = 未知。只是过滤属性，不参与查重。 |
+| `edition` | 展示名括号里的 `<ver>` 标注（GCP / 基地配色 / 初音未来 / 最终决战…），可空；自由文本，不参与查重。 |
+| `appearance` | 规模化的一组视觉效果：彩透/透明/机械透明/电镀/钛电镀/彩色电镀/特殊涂层/珍珠/金属色/发光/未启动/环保…；自由文本，空 = 无/未知。由原 `craft` 改名，值改为中文。 |
+| `aliases` | 来源名，分号分隔：78dm 原名 + 历史展示名。外部目录重新同步时按它匹配，**不要用 `kit_name` 匹配**。 |
 | `release_date` | 首次发售日期；再版信息保留在 `detail`。只用于展示/排序，不参与查重。 |
 | `created_at` | 内部入库审计时间，不在产品 UI/CSV 中展示。 |
 | `product_code` | 自由文本，可空；厂商给产品的市场编号。 |
-| `kit_name` | 产品识别信息，模型名称必填；版本/配色以括号并入名称。 |
+| `kit_name` | 展示名，必填；格式 `name（ver）[外观]`，子实体用 `·` 连接（`扎古II·高机动型·强尼莱登专用`）。人工标准化，不照抄万代原名。 |
 | `price` | 当前价格，自由文本（`78`、`68元`、`22000日元`、`299-398`），不拆数值/币种。 |
 | `detail` | 自由补充说明，可空。 |
 | `source` | 资料来源；新 CSV 由人工填写，旧测试数据使用“初始化测试”。 |
@@ -63,13 +64,13 @@
 
 ### `collections` 与 `collection_items`
 
-收藏集是“人定的产品清单”：`collections` 存标题、描述、状态、日期，`collection_items` 存一个**已录入产品**
+收藏集是“人定的产品清单”：`collections` 只存标题和描述，`collection_items` 存一个**已录入产品**
 和一条目标备注。目标不允许占位，`product_id` 非空；产品删除时目标级联删除。进度不落库，由 `assets` 派生：
 已售不算拥有，同款多台只算一次。设计见 [collection-system.md](collection-system.md)。
 
 ## 已删除的设计
 
-`collection_targets` 已删除，旧模型没有收藏集实体、没有描述/状态，还把“想收/已拥有”混在一个枚举里。
+`collection_targets` 已删除，旧模型没有收藏集实体，也没有描述，还把“想收/已拥有”混在一个枚举里。
 收藏集现在按 `collections + collection_items` 重新建模，见 [collection-system.md](collection-system.md)。
 愿望单仍是独立功能。
 

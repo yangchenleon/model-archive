@@ -2,7 +2,7 @@
 import { reactive, ref, watch } from 'vue'
 import { LoaderCircle, Plus, X } from 'lucide-vue-next'
 import ManufacturerPicker from './ManufacturerPicker.vue'
-import { CHANNEL_OPTIONS, CRAFT_OPTIONS } from '../taxonomy'
+import { CHANNEL_OPTIONS, APPEARANCE_OPTIONS } from '../taxonomy'
 
 const props = defineProps({
   open: { type: Boolean, required: true },
@@ -20,7 +20,7 @@ const form = reactive({
   work: '',
   release_channel: '',
   edition: '',
-  craft: '',
+  appearance: '',
   release_date: '',
   detail: '',
   source: '手动录入',
@@ -96,7 +96,7 @@ async function submit() {
         work: valueOrNull(form.work),
         release_channel: form.release_channel || null,
         edition: valueOrNull(form.edition),
-        craft: form.craft || null,
+        appearance: form.appearance || null,
         release_date: form.release_date || null,
         source: form.source.trim(),
         product_code: valueOrNull(form.product_code),
@@ -106,7 +106,7 @@ async function submit() {
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.detail || '保存失败')
     Object.assign(form, {
-      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', craft: '', release_date: '', detail: '', source: '手动录入',
+      kit_name: '', manufacturer_id: '', product_code: '', product_line_id: '', work: '', release_channel: '', edition: '', appearance: '', release_date: '', detail: '', source: '手动录入',
     })
     lines.value = []
     emit('created', body)
@@ -145,11 +145,11 @@ async function submit() {
           </label>
           <label class="form-field"><span>作品 / IP</span><input v-model="form.work" placeholder="例如：EVANGELION / 勇者王 / SEED" /></label>
           <label class="form-field"><span>版本 / edition</span><input v-model="form.edition" placeholder="官方标注：彩透ver / 豪华版 / Bilibili ver" /></label>
-          <label class="form-field"><span>工艺</span>
-            <select v-model="form.craft">
-              <option value="">未知/无</option>
-              <option v-for="craft in CRAFT_OPTIONS" :key="craft.value" :value="craft.value">{{ craft.label }}</option>
-            </select>
+          <label class="form-field"><span>外观</span>
+            <input v-model="form.appearance" list="appearance-values-add" placeholder="彩透 / 电镀 / 特殊涂层 / 未启动 …" />
+            <datalist id="appearance-values-add">
+              <option v-for="appearance in APPEARANCE_OPTIONS" :key="appearance.value" :value="appearance.value" />
+            </datalist>
           </label>
           <label class="form-field"><span>渠道</span>
             <select v-model="form.release_channel">

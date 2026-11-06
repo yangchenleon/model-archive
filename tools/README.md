@@ -13,17 +13,17 @@ runbook (cookie handling, field mapping, import rules, verification and
 troubleshooting). Quick commands:
 
 78dm pages require the local `_identity` cookie (the root `78cookie2` file is
-gitignored). The scraper writes a reviewable JSON manifest and cover images
-under `imports/`; it does not write to PostgreSQL.
+gitignored). The scraper writes a reviewable JSON manifest and, only with
+`--images`, cover images under `outputs/`; it does not write to PostgreSQL.
 
 ```bash
 .venv/bin/python tools/scrape_78dm.py \
   --url https://acg.78dm.net/ct/341672.html \
-  --out imports/78dm/341672
+  --out outputs/78dm/341672
 
-# download/re-download images in parallel, resumable
+# optional: download/re-download images in parallel, resumable
 .venv/bin/python tools/download_78dm_images.py \
-  --dir imports/78dm/341672 --workers 8
+  --dir outputs/78dm/341672 --workers 8
 ```
 
 `products.json` keeps the 78dm fields (name, version, code, price, release
@@ -55,6 +55,8 @@ database mutators live in `tests/` instead:
 
 - `tests/import_78dm_rg.py` — replace `万代/RG` from a local manifest
 - `tests/import_78dm_mg.py` — replace `万代/MG` + `万代/MGEX`
+- `tests/import_78dm_blokees.py` — import 布鲁可 传奇版 from the targeted manifest
+- `tests/import_78dm_new_mfgs.py` — import 壹理创玩 / 创模玩 / 所罗门模玩 / 圣斯基 / 御模道
 - `tests/seed_review_queue.py` — idempotent review-queue seed
 
 ## Background and scope

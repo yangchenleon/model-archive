@@ -77,7 +77,9 @@ def get_collection(client, collection_id):
 
 def test_collection_crud_and_empty_stats(client):
     collection = make_collection(client, "RG 扎古全制霸", description="只收万代 RG 扎古")
-    assert collection["status"] == "active"
+    assert "status" not in collection
+    assert "started_on" not in collection
+    assert "target_on" not in collection
     assert collection["stats"] == {
         "total": 0,
         "owned": 0,
@@ -92,15 +94,14 @@ def test_collection_crud_and_empty_stats(client):
 
     renamed = client.patch(
         f"/api/v1/collections/{collection['id']}",
-        json={"title": "RG 扎古", "status": "planning", "description": "先列范围"},
+        json={"title": "RG 扎古", "description": "先列范围"},
     )
     assert renamed.status_code == 200
     assert renamed.json()["title"] == "RG 扎古"
-    assert renamed.json()["status"] == "planning"
+    assert renamed.json()["description"] == "先列范围"
 
     assert client.post("/api/v1/collections", json={"title": "RG 扎古"}).status_code == 409
     assert client.post("/api/v1/collections", json={"title": "   "}).status_code == 422
-    assert client.post("/api/v1/collections", json={"title": "x", "status": "nope"}).status_code == 422
 
     other = make_collection(client, "另一个收藏集")
     assert client.patch(
@@ -285,22 +286,15 @@ def test_bulk_remove_and_item_ownership(client):
     ).status_code == 422
 
 
-def test_status_and_search_filters_on_collection_list(client):
-    make_collection(client, "进行中的套", status="active", description="扎古主题")
-    make_collection(client, "构想中的套", status="planning", description="夏亚主题")
-    make_collection(client, "暂停的套", status="paused")
-
-    active = client.get("/api/v1/collections?status=active").json()
-    active_titles = [row["title"] for row in active]
-    assert "进行中的套" in active_titles
-    assert "构想中的套" not in active_titles
-    assert "暂停的套" not in active_titles
+def test_search_filter_on_collection_list(client):
+    make_collection(client, "进行中的套", description="扎古主题")
+    make_collection(client, "构想中的套", description="夏亚主题")
+    make_collection(client, "暂停的套")
 
     searched = client.get("/api/v1/collections?q=夏亚").json()
     searched_titles = [row["title"] for row in searched]
     assert "构想中的套" in searched_titles
     assert "进行中的套" not in searched_titles
-    assert client.get("/api/v1/collections?status=nope").status_code == 422
 
 
 def test_product_reverse_lookup_and_delete_cascades(client):

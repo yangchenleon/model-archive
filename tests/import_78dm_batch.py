@@ -40,7 +40,7 @@ FALLBACK_LINE = "原创拼装"
 # section name -> (line, work); sections not listed are skipped for that series.
 SERIES = [
     {
-        "manifest": "imports/78dm/420592/products.json",
+        "manifest": "outputs/78dm/420592/products.json",
         "manufacturer": "驭意堂",
         "sections": {"玄机铸型录系列": ("玄机铸型录系列", "玄机铸型录系列")},
         "existing": [
@@ -48,7 +48,7 @@ SERIES = [
         ],
     },
     {
-        "manifest": "imports/78dm/416211/products.json",
+        "manifest": "outputs/78dm/416211/products.json",
         "manufacturer": "机核工业",
         "sections": {"塑料拼装系列": (FALLBACK_LINE, FALLBACK_LINE)},
         "existing": [
@@ -60,7 +60,7 @@ SERIES = [
         ],
     },
     {
-        "manifest": "imports/78dm/407068/products.json",
+        "manifest": "outputs/78dm/407068/products.json",
         "manufacturer": "铭匠传",
         "sections": {"铭匠传拼装系列  普通版": (FALLBACK_LINE, FALLBACK_LINE)},
         "existing": [
@@ -73,7 +73,7 @@ SERIES = [
         ],
     },
     {
-        "manifest": "imports/78dm/443611/products.json",
+        "manifest": "outputs/78dm/443611/products.json",
         "manufacturer": "光冕",
         "sections": {"普通款": (FALLBACK_LINE, FALLBACK_LINE)},
         "existing": [
@@ -81,7 +81,7 @@ SERIES = [
         ],
     },
     {
-        "manifest": "imports/78dm/351234/products.json",
+        "manifest": "outputs/78dm/351234/products.json",
         "manufacturer": "橘猫工业",
         "sections": {
             "QOSMOS 铁甲小宝系列": ("QOSMOS", "铁甲小宝"),

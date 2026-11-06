@@ -5,8 +5,10 @@ products with the manifest.
 
 The 78dm MG page mixes channels, editions, works and accessories. All rows are
 kept on line=MG except the EXtreme section, which is line=MGEX. Unreleased
-reference products are excluded. Edition is the official section label; craft is
-a single common finish/process value inferred from the edition/name.
+reference products are excluded. Edition is the official section label; appearance
+is a scalable visual-effect label (彩透 / 电镀 / 未启动…) inferred from the
+edition/name. The raw 78dm title is written into `aliases`, which is the only
+field a re-sync may use to match an existing product.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ CHANNEL_BY_SECTION = {
     "普通版": "regular",
     "网络限定版": "pb",
     "其他限定版": "limited",
-    "一番赏": "lottery",
+    "一番赏": "limited",
     "HD配色": "limited",
     "重力战线": "limited",
     "官方豪华版": "limited",
@@ -85,17 +87,17 @@ WORK_BY_SECTION = {
 EXCLUDED_SECTIONS = {"往期未商品化参考出品"}
 
 CRAFT_PATTERNS = (
-    ("clear_plated", ("电镀透明",)),
-    ("color_plated", ("彩色电镀",)),
-    ("clear", ("彩透",)),
-    ("transparent", ("透明",)),
-    ("plated", ("电镀",)),
-    ("pearl", ("珍珠", "珠光")),
-    ("metallic", ("金属",)),
-    ("coating", ("涂层", "涂装")),
-    ("matte", ("消光",)),
-    ("crystal", ("水晶",)),
-    ("luminous", ("夜光",)),
+    ("透明电镀", ("电镀透明",)),
+    ("彩色电镀", ("彩色电镀",)),
+    ("彩透", ("彩透",)),
+    ("透明", ("透明",)),
+    ("电镀", ("电镀",)),
+    ("珍珠", ("珍珠", "珠光")),
+    ("金属色", ("金属",)),
+    ("特殊涂层", ("涂层", "涂装")),
+    ("消光", ("消光",)),
+    ("水晶", ("水晶",)),
+    ("发光", ("夜光",)),
 )
 
 
@@ -119,11 +121,11 @@ def strip_code(name: str) -> str:
     return re.sub(r"^\s*MG\s*\d+\s+", "", name or "", flags=re.I).strip()
 
 
-def infer_craft(*values: str) -> str | None:
+def infer_appearance(*values: str) -> str | None:
     text = " ".join(value for value in values if value)
-    for craft, patterns in CRAFT_PATTERNS:
+    for appearance, patterns in CRAFT_PATTERNS:
         if any(pattern in text for pattern in patterns):
-            return craft
+            return appearance
     return None
 
 
@@ -162,7 +164,7 @@ def build_detail(product: dict, line: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--manifest", default="imports/78dm/2328/products.json")
+    parser.add_argument("--manifest", default="outputs/78dm/2328/products.json")
     parser.add_argument("--manufacturer", default="万代")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
@@ -197,7 +199,7 @@ def main() -> None:
             "channel": channel,
             "edition": edition,
             "work": WORK_BY_SECTION.get(section) or "高达",
-            "craft": infer_craft(product.get("edition", ""), section, base_name),
+            "appearance": infer_appearance(product.get("edition", ""), section, base_name),
             "release_date": parse_release_date(product.get("release_date", "")),
             "product_code": code_for(
                 product,
@@ -239,7 +241,7 @@ def main() -> None:
     print("channels", Counter(row["channel"] for row in rows))
     print("works", Counter(row["work"] for row in rows))
     print("editions", Counter(row["edition"] for row in rows).most_common(12))
-    print("crafts", Counter(row["craft"] for row in rows))
+    print("appearance", Counter(row["appearance"] for row in rows))
     print("duplicates resolved", [(line, name, len(group)) for (line, name), group in by_name.items() if len(group) > 1][:10])
 
     if not args.apply:
@@ -299,9 +301,10 @@ def main() -> None:
                 "work": row["work"],
                 "release_channel": row["channel"],
                 "edition": row["edition"],
-                "craft": row["craft"],
+                "appearance": row["appearance"],
                 "release_date": row["release_date"],
                 "detail": build_detail(source, row["line"]),
+                "aliases": source.get("name") or None,
                 "source": source.get("url", ""),
                 "price": source.get("price") or None,
             })

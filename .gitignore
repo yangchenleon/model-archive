@@ -6,8 +6,6 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .mypy_cache/
-# Local CSV files used for one-off imports are not versioned.
-imports/
 # Scratch files and throwaway downloads from ad-hoc tooling.
 .tmp/
 # Local 78dm cookies; never commit them.

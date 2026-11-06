@@ -73,11 +73,12 @@ class ProductCreate(BaseModel):
     work: str | None = None
     release_channel: str | None = None
     edition: str | None = None
-    craft: str | None = None
+    appearance: str | None = None
     release_date: date | None = None
     detail: str | None = None
     source: str
     price: str | None = None
+    aliases: str | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -88,11 +89,12 @@ class ProductUpdate(BaseModel):
     work: str | None = None
     release_channel: str | None = None
     edition: str | None = None
-    craft: str | None = None
+    appearance: str | None = None
     release_date: date | None = None
     detail: str | None = None
     source: str | None = None
     price: str | None = None
+    aliases: str | None = None
 
 
 class ProductBulkChannel(BaseModel):
@@ -112,28 +114,23 @@ class ProductRead(BaseModel):
     work: str | None = None
     release_channel: str | None = None
     edition: str | None = None
-    craft: str | None = None
+    appearance: str | None = None
     release_date: date | None = None
     detail: str | None = None
     source: str
     price: str | None = None
     created_at: datetime
+    aliases: str | None = None
 
 
 class CollectionCreate(BaseModel):
     title: str
     description: str | None = None
-    status: str = "active"
-    started_on: date | None = None
-    target_on: date | None = None
 
 
 class CollectionUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
-    status: str | None = None
-    started_on: date | None = None
-    target_on: date | None = None
 
 
 class CollectionStats(BaseModel):
@@ -152,9 +149,6 @@ class CollectionRead(BaseModel):
     id: UUID
     title: str
     description: str | None = None
-    status: str
-    started_on: date | None = None
-    target_on: date | None = None
     created_at: datetime
     updated_at: datetime
     stats: CollectionStats
@@ -256,7 +250,7 @@ class ReviewCreateRequest(BaseModel):
     work: str | None = None
     release_channel: str | None = None
     edition: str | None = None
-    craft: str | None = None
+    appearance: str | None = None
     release_date: date | None = None
     product_code: str | None = None
     detail: str | None = None
@@ -274,7 +268,7 @@ class ProductBrief(BaseModel):
     work: str | None = None
     release_channel: str | None = None
     edition: str | None = None
-    craft: str | None = None
+    appearance: str | None = None
     release_date: date | None = None
 
 

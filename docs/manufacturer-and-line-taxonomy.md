@@ -34,16 +34,16 @@
    - 产品改厂家时，如果原系列不属于新厂家，自动回到未知/要求重选。
 
 6. **渠道不塞进系列**
-   - 产品单独有 `release_channel`：`regular / pb / base / event / lottery / limited`，空 = 未知。
-   - `regular` 只对应 78dm「普通版」；`event` 含会场、联名、竞赛、周年；`limited` 是渠道不明确的限定兜底；`base`/`lottery` 分别对应高达基地/一番赏。
+   - 产品单独有 `release_channel`：`regular / pb / base / event / limited`，空 = 未知。
+   - `regular` 只对应 78dm「普通版」；`event` 含会场、联名、竞赛、周年；`limited` 是渠道不明确的限定兜底；`base` 对应高达基地，一番赏并入 `limited` 并把「一番赏」写进 `edition`。
    - 渠道是封闭维度，不是 78dm 的“级别或分类”。例如 SEED 页面里的 `HG SEED HD`、`1/100 SEED` 是 line/规格，`网络限定` 才是 PB 渠道。
    - 不要做“系列 → 子系列 → 渠道”的树。
 
-7. **作品/IP、版本、工艺是另外三个正交维度**
+7. **作品/IP、版本、外观是另外三个正交维度**
    - `products.work`：作品/IP，例如 `EVANGELION`、`勇者王`、`机动警察`、`重力战线`。
-   - `products.edition`：官方版本标注，例如 `彩透ver`、`豪华版`、`Bilibili ver`。
-   - `products.craft`：单一常用工艺，例如 `彩透`、`电镀`、`电镀透明`、`水晶`。
-   - 都不参与产品身份查重；同一个 `RG`/`MG` line 下可以有多个作品、版本、工艺。
+   - `products.edition`：展示名括号里的版本标签，例如 `GCP`、`基地配色`、`Bilibili 联名`。
+   - `products.appearance`：规模化的一组视觉效果，例如 `彩透`、`电镀`、`特殊涂层`、`未启动`、`环保`。
+   - 都不参与产品身份查重；同一个 `RG`/`MG` line 下可以有多个作品、版本、外观。
 
 8. **发售时间**
    - `products.release_date` 只存首次发售日期；再版/延期原文留在 `detail`。
@@ -106,9 +106,10 @@ products (
     manufacturer_id uuid not null references manufacturers(id) on delete restrict,
     product_line_id uuid references product_lines(id) on delete set null,
     work varchar(120),           -- 作品/IP，例如 EVANGELION；可空
-    release_channel varchar(16), -- regular/pb/base/event/lottery/limited；可空
-    edition varchar(120),        -- 官方版本标注；可空
-    craft varchar(24),           -- 单一常用工艺；可空
+    release_channel varchar(16), -- regular/pb/base/event/limited；可空
+    edition varchar(120),        -- 展示名括号里的版本标签；可空
+    appearance varchar(32),      -- 外观标签，自由文本；可空
+    aliases text,                -- 来源名，分号分隔；可空
     release_date date             -- 首次发售日期；可空
 )
 
@@ -215,7 +216,7 @@ review_items (
 3. B社是否并入万代（目前保留独立）。
 4. 只剩 1 组同厂商同系列同名产品（大班 / 88系列 / `MB 金异端 天·蜜娜`，编号 8804、8826）需要人工判断是否合并；其余 16 组同名不同系列已按新规则合法。
 5. `work` 已填 1034 条：高达 995、EVANGELION 14、机动警察 11、一年战争 4、重力战线 4、勇者王 3、圣战士丹拜因 3；非万代未填作品的仍为空，不强行标高达。
-6. MG 794、MGEX 8 已入库；MG 的 edition/craft 按 78dm 分类填充；通贩 edition 固定普通版，特殊武器配件 edition 为配件包。
+6. MG 794、MGEX 8 已入库；MG 的 edition/appearance 按 78dm 分类填充；通贩 edition 固定普通版，特殊武器配件 edition 为配件包。
 
 ## 九、明确不做
 

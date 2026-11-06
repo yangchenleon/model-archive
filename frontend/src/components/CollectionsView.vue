@@ -1,9 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { LoaderCircle, Plus, RefreshCw, Search, Trophy } from 'lucide-vue-next'
+import { Grid2X2, List, LoaderCircle, Plus, RefreshCw, Search, Trophy } from 'lucide-vue-next'
 import CollectionDialog from './CollectionDialog.vue'
 import CollectionProgress from './CollectionProgress.vue'
-import { COLLECTION_STATUSES, COLLECTION_STATUS_META, formatShortDate } from '../collectionMeta'
+import { formatShortDate } from '../collectionMeta'
 
 const emit = defineEmits(['open'])
 
@@ -11,34 +11,33 @@ const collections = ref([])
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
-const statusFilter = ref('')
 const sortBy = ref('updated')
+const viewMode = ref('grid')
 const dialogOpen = ref(false)
 const editing = ref(null)
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase()
   const rows = collections.value.filter((collection) => {
-    if (statusFilter.value && collection.status !== statusFilter.value) return false
     if (!term) return true
     return [collection.title, collection.description].filter(Boolean).join(' ').toLowerCase().includes(term)
   })
   return rows.slice().sort((a, b) => {
-    if (sortBy.value === 'progress') {
-      const diff = (b.stats.percent || 0) - (a.stats.percent || 0)
-      return diff || a.title.localeCompare(b.title, 'zh-CN')
+    if (sortBy.value === 'slow' || sortBy.value === 'fast') {
+      const diff = (a.stats.percent || 0) - (b.stats.percent || 0)
+      return (sortBy.value === 'slow' ? diff : -diff)
+        || a.title.localeCompare(b.title, 'zh-CN')
     }
-    if (sortBy.value === 'title') return a.title.localeCompare(b.title, 'zh-CN')
     return (b.updated_at || '').localeCompare(a.updated_at || '')
+      || a.title.localeCompare(b.title, 'zh-CN')
   })
 })
 
 const overview = computed(() => {
-  const active = collections.value.filter((collection) => collection.status === 'active').length
   const completed = collections.value.filter((collection) => collection.stats.completed).length
   const targets = collections.value.reduce((sum, collection) => sum + collection.stats.total, 0)
   const owned = collections.value.reduce((sum, collection) => sum + collection.stats.owned, 0)
-  return { active, completed, targets, owned }
+  return { total: collections.value.length, completed, targets, owned }
 })
 
 async function loadCollections() {
@@ -84,7 +83,7 @@ onMounted(loadCollections)
     </header>
 
     <section class="overview-row collection-overview" aria-label="收藏集概要">
-      <div class="metric"><span>进行中</span><strong>{{ overview.active }}</strong><small>状态为进行中</small></div>
+      <div class="metric"><span>收藏集</span><strong>{{ overview.total }}</strong><small>清单数量</small></div>
       <div class="metric"><span>已达成</span><strong>{{ overview.completed }}</strong><small>拥有数 = 目标数</small></div>
       <div class="metric"><span>目标总数</span><strong>{{ overview.targets }}</strong><small>所有清单加总</small></div>
       <div class="metric"><span>已拥有</span><strong>{{ overview.owned }}</strong><small>不算已售</small></div>
@@ -93,28 +92,25 @@ onMounted(loadCollections)
     <section class="toolbar">
       <label class="search-field"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索名称或描述" /></label>
       <label class="select-field">
-        <select v-model="statusFilter">
-          <option value="">所有状态</option>
-          <option v-for="item in COLLECTION_STATUSES" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
-      </label>
-      <label class="select-field">
-        <select v-model="sortBy">
-          <option value="updated">最近更新</option>
-          <option value="progress">进度</option>
-          <option value="title">名称</option>
+        <select v-model="sortBy" aria-label="排序方式">
+          <option value="updated" title="按收藏集自身的名称、描述、目标变动时间排序；资产状态变化不影响">最近更新</option>
+          <option value="slow">进度最慢</option>
+          <option value="fast">进度最快</option>
         </select>
       </label>
       <span class="result-count">{{ filtered.length }} 个</span>
+      <div class="view-switch" aria-label="视图方式">
+        <button :class="{ selected: viewMode === 'grid' }" type="button" aria-label="网格视图" title="网格视图" @click="viewMode = 'grid'"><Grid2X2 :size="17" /></button>
+        <button :class="{ selected: viewMode === 'list' }" type="button" aria-label="列表视图" title="列表视图" @click="viewMode = 'list'"><List :size="18" /></button>
+      </div>
     </section>
 
     <p v-if="loading" class="state-panel"><LoaderCircle class="spin" :size="24" />正在读取收藏集…</p>
     <p v-else-if="error" class="state-panel error-state">{{ error }}</p>
-    <div v-else-if="filtered.length" class="collection-grid">
-      <button v-for="collection in filtered" :key="collection.id" class="collection-card" type="button" @click="emit('open', collection.id)">
-        <div class="card-head">
-          <span class="status-pill" :class="collection.status">{{ COLLECTION_STATUS_META[collection.status]?.label || collection.status }}</span>
-          <span v-if="collection.stats.completed" class="completed-badge">已制霸</span>
+    <div v-else-if="filtered.length" class="collection-grid" :class="`view-${viewMode}`">
+      <button v-for="collection in filtered" :key="collection.id" class="collection-card" :class="{ 'is-list': viewMode === 'list' }" type="button" @click="emit('open', collection.id)">
+        <div v-if="collection.stats.completed" class="card-head">
+          <span class="completed-badge">已制霸</span>
         </div>
         <h2>{{ collection.title }}</h2>
         <p class="card-desc">{{ collection.description || '还没有描述。' }}</p>
@@ -132,8 +128,7 @@ onMounted(loadCollections)
 
         <footer class="card-foot">
           <span>{{ collection.stats.completed ? '全部收齐' : `还差 ${collection.stats.missing} 款` }}</span>
-          <span v-if="collection.target_on">目标 {{ formatShortDate(collection.target_on) }}</span>
-          <span v-else>更新 {{ formatShortDate(collection.updated_at) }}</span>
+          <span>更新 {{ formatShortDate(collection.updated_at) }}</span>
         </footer>
       </button>
     </div>
@@ -150,8 +145,28 @@ onMounted(loadCollections)
 <style scoped>
 .header-actions { display: flex; gap: 8px; }
 .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.collection-grid.view-list { grid-template-columns: 1fr; gap: 8px; }
 .collection-card { display: grid; gap: 10px; padding: 18px; text-align: left; background: #fff; border: 1px solid #dbe2de; border-radius: 8px; transition: border-color .15s ease, transform .15s ease, box-shadow .15s ease; }
 .collection-card:hover { border-color: #8eaca1; box-shadow: 0 5px 14px #1e312714; transform: translateY(-2px); }
+.collection-card.is-list {
+  grid-template-columns: minmax(0, 1fr) 260px;
+  grid-template-areas:
+    "head head"
+    "title progress-head"
+    "desc progress"
+    "legend legend"
+    "foot foot";
+  gap: 5px 22px;
+  align-items: start;
+  padding: 14px 18px;
+}
+.collection-card.is-list .card-head { grid-area: head; }
+.collection-card.is-list h2 { grid-area: title; }
+.collection-card.is-list .card-desc { grid-area: desc; min-height: 0; }
+.collection-card.is-list .progress-head { grid-area: progress-head; margin-top: 2px; }
+.collection-card.is-list :deep(.collection-progress) { grid-area: progress; margin-top: 2px; }
+.collection-card.is-list .legend { grid-area: legend; margin-top: 3px; }
+.collection-card.is-list .card-foot { grid-area: foot; margin-top: 3px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .collection-card h2 { margin: 0; color: #1d2b27; font-size: 17px; line-height: 1.35; }
 .card-desc { display: -webkit-box; min-height: 38px; margin: 0; overflow: hidden; color: #6b7774; font-size: 12px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
@@ -165,15 +180,14 @@ onMounted(loadCollections)
 .dot.unbuilt { background: #8fc7b4; }
 .dot.missing { background: #e6e9e6; border: 1px solid #cbd6d0; }
 .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 10px; color: #87938f; font-size: 11px; border-top: 1px solid #edf0ee; }
-.status-pill { display: inline-block; padding: 2px 8px; font-size: 11px; border-radius: 999px; border: 1px solid #dfe6e1; }
-.status-pill.planning { color: #4f5f8a; background: #eef3fb; border-color: #d3dff0; }
-.status-pill.active { color: #1f5b4c; background: #e8f3ee; border-color: #c9e2d7; }
-.status-pill.paused { color: #8a5f18; background: #fdf6e7; border-color: #f0dfb8; }
-.status-pill.abandoned { color: #8a8f8c; background: #f3f3f1; border-color: #e2e2df; }
 .completed-badge { padding: 2px 8px; color: #7a5312; font-size: 11px; font-weight: 600; background: #fdf3d9; border: 1px solid #ecd39b; border-radius: 999px; }
 .collection-empty { flex-direction: column; }
 @media (max-width: 650px) {
   .collection-grid { grid-template-columns: 1fr; }
+  .collection-card.is-list {
+    grid-template-columns: 1fr;
+    grid-template-areas: "head" "title" "desc" "progress-head" "progress" "legend" "foot";
+  }
   .collection-overview { grid-template-columns: 1fr 1fr; }
 }
 </style>

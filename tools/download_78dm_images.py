@@ -1,7 +1,7 @@
 """Download cover images for an existing 78dm products.json manifest.
 
-Reads imports/78dm/<series>/products.json, downloads each image_url into
-imports/78dm/<series>/images/<id>.<ext>, and updates image_file relative paths.
+Reads outputs/78dm/<series>/products.json, downloads each image_url into
+outputs/78dm/<series>/images/<id>.<ext>, and updates image_file relative paths.
 Existing files are skipped, so the downloader is resumable.
 """
 
@@ -75,7 +75,7 @@ def download(product: dict, images_dir: Path) -> tuple[str, str | None, str | No
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", required=True, help="e.g. imports/78dm/341672")
+    parser.add_argument("--dir", required=True, help="e.g. outputs/78dm/341672")
     parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()
 

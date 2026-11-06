@@ -17,6 +17,7 @@ docker compose up --build -d
 - Manufacturer directory assessment (historical): [docs/manufacturer-normalization.md](docs/manufacturer-normalization.md)
 - Manufacturer/series taxonomy (implemented): [docs/manufacturer-and-line-taxonomy.md](docs/manufacturer-and-line-taxonomy.md)
 - 78dm scraping and RG import runbook: [docs/78dm-scraping.md](docs/78dm-scraping.md)
+- namu.wiki RG reference (crawl method, data shape, mapping table): [docs/namu-wiki-rg.md](docs/namu-wiki-rg.md)
 
 Adminer connection details: system `PostgreSQL`, server `db`, and the database/user/password from `.env`.
 
@@ -38,12 +39,12 @@ npm run dev
 | --- | --- |
 | `manufacturers` | Canonical maker: name, category (`gundam / guomo / ko`, null = unclassified), tier (1–3, larger sorts later), hidden `sort_order`, description. No alias table: a wrong name is data to fix. |
 | `product_lines` | Flat series owned by one manufacturer; `(manufacturer_id, name)` unique. HG, HGUC and HG GTO are separate series. Deleting one sets its products to NULL (shown as 未知); no hierarchy. |
-| `products` | The product catalog: `manufacturer_id` (required), `product_line_id` (nullable), `work` (optional IP/work, e.g. EVANGELION), `release_channel` (regular / pb / base / event / lottery / limited, NULL = unknown), `edition` (official version label), `craft` (single common finish/process), `release_date` (first release date; reprint notes live in `detail`), code, name, detail, source, free-text `price`, `created_at` (internal audit only). Identity is `(manufacturer_id, product_line_id, kit_name)` at the service layer; the same name in a different series is a different product, and a NULL line is its own bucket. Work, channel, edition and craft are metadata, not identity. |
+| `products` | The product catalog: `manufacturer_id` (required), `product_line_id` (nullable), `work` (optional IP/work, e.g. EVANGELION), `release_channel` (regular / pb / base / event / limited, NULL = unknown), `edition` (the `<ver>` label shown in parentheses, e.g. `GCP` / `基地配色`), `appearance` (a scalable visual-effect label: `彩透` / `透明` / `电镀` / `特殊涂层` / `未启动` / `环保`…; free text, NULL = none), `release_date` (first release date; reprint notes live in `detail`), `aliases` (source names, semicolon-separated: the 78dm name and any former display name), code, name, detail, source, free-text `price`, `created_at` (internal audit only). `kit_name` is the house display name, written as `name（ver）[appearance]` with `·` joining sub-entities (e.g. `扎古II·高机动型·强尼莱登专用`); it is standardised by hand and deliberately not a copy of the Bandai name. Identity is `(manufacturer_id, product_line_id, kit_name)` at the service layer; the same name in a different series is a different product, and a NULL line is its own bucket. Work, channel, edition and appearance are metadata, not identity. |
 | `review_items` | Persistent ingestion audit queue from `outputs/products/products.json`: source video/second/evidence plus `pending / mapped / created / skipped`. Raw `brand` / `line` are kept, plus optional matched manufacturer/line IDs. Mapping only links the mention to a product; it never edits the product. |
 | `assets` | One row per owned kit: `code` (`K7M2Q`, five random Crockford Base32 chars), `state` (pending / keep / displayed / stored / sold), purchase / build / sale facts and the review. |
 | `tags` | One physical sticker per bag (`R4TB9`). Every sticker has its own random code, never reused. Selling an asset sets `retired_at`: the sticker leaves the print queues and cannot be reprinted, but the row stays as history. |
 | `asset_state_changes` | Audit of state transitions; field edits are not recorded. |
-| `collections` | A human-defined set: title, description, intent (`planning / active / paused / abandoned`), optional dates. No difficulty column — that belongs in the description. |
+| `collections` | A human-defined set: title and description, nothing else. No status, no start/target dates, no difficulty column — completion is derived from assets, and difficulty belongs in the description. |
 | `collection_items` | One existing product in a collection, plus a plan note. `product_id` is required and `ON DELETE CASCADE`: there are no placeholder targets. Progress is derived from `assets`; sold rows do not count and multiple copies count once. |
 
 ## Create products via API
@@ -73,10 +74,17 @@ for 万代 products the default is `高达`, while non-Gundam works are explicit
 date is stored, with reprint notes kept in `detail`. Both are metadata, not
 part of product identity.
 `release_channel` is optional too:
-`regular` / `pb` / `base` / `event` / `lottery` / `limited`; omit or send `null` for 未知.
-`edition` is the official version label (free text); `regular` products default
-to `普通版`. `craft` is a single common finish/process value. All are optional
-metadata, not part of duplicate detection. The digit-only `product_code` for
+`regular` / `pb` / `base` / `event` / `limited`; omit or send `null` for 未知.
+`edition` is the `<ver>` label that appears in parentheses in the display name
+(free text; `regular` products keep `普通版`). `appearance` is a free-text
+visual-effect label (`彩透` / `电镀` / `未启动`…), not a closed enum.
+`aliases` keeps source names separated by `;` — the 78dm name plus any former
+display name. All are optional metadata, not part of duplicate detection.
+
+> **Re-syncing an external catalogue (78dm etc.) must look products up by
+> `aliases`, not by `kit_name`.** Display names are standardised by hand, so a
+> 78dm title will usually not match `kit_name` any more; matching on the display
+> name creates duplicates. Write the incoming title into `aliases` as well. The digit-only `product_code` for
 万代 regular products is a one-off data cleanup for the current 78dm import,
 not a general API rule; non-Bandai codes such as `MNP-XH01` are preserved.
 

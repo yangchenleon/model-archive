@@ -4,7 +4,7 @@ import { ArrowLeft, LoaderCircle, Pencil, Plus, RefreshCw, Search, Trash2, Troph
 import CollectionDialog from './CollectionDialog.vue'
 import CollectionItemDialog from './CollectionItemDialog.vue'
 import CollectionProgress from './CollectionProgress.vue'
-import { COLLECTION_STATUS_META, formatShortDate } from '../collectionMeta'
+import { formatShortDate } from '../collectionMeta'
 
 const props = defineProps({
   collectionId: { type: String, required: true },
@@ -40,8 +40,6 @@ const stats = computed(() => collection.value?.stats || {
 })
 
 const selectedSet = computed(() => new Set(selected.value))
-const selectedItems = computed(() => items.value.filter((item) => selectedSet.value.has(item.id)))
-const selectedMissing = computed(() => selectedItems.value.filter((item) => !item.owned))
 const allChecked = computed(() => items.value.length > 0 && items.value.every((item) => selectedSet.value.has(item.id)))
 
 function flash(text, isError = false) {
@@ -131,41 +129,6 @@ function statusClass(item) {
   return item.sold_only ? 'sold' : 'missing'
 }
 
-async function own(item) {
-  if (busy.value) return
-  busy.value = true
-  try {
-    const asset = await api('/api/v1/assets', {
-      method: 'POST',
-      body: JSON.stringify({ product_id: item.product_id, state: 'pending' }),
-    })
-    flash(`已登记 ${asset.code}（待拼）`)
-    await Promise.all([loadCollection(), loadItems()])
-  } catch (exc) {
-    flash(exc.message, true)
-  } finally {
-    busy.value = false
-  }
-}
-
-async function ownSelected() {
-  if (busy.value || !selectedMissing.value.length) return
-  busy.value = true
-  try {
-    const created = await api('/api/v1/assets/bulk', {
-      method: 'POST',
-      body: JSON.stringify({ product_ids: selectedMissing.value.map((item) => item.product_id), state: 'pending' }),
-    })
-    flash(`已登记 ${created.length} 台（待拼）`)
-    selected.value = []
-    await Promise.all([loadCollection(), loadItems()])
-  } catch (exc) {
-    flash(exc.message, true)
-  } finally {
-    busy.value = false
-  }
-}
-
 async function removeSelected() {
   if (busy.value || !selected.value.length) return
   if (!window.confirm(`从收藏集移除 ${selected.value.length} 个目标？\n\n只动清单，不会删除产品或资产。`)) return
@@ -245,13 +208,10 @@ watch(() => props.collectionId, loadAll, { immediate: true })
         <button class="text-button back" type="button" @click="emit('back')"><ArrowLeft :size="16" />收藏集</button>
         <div class="title-row">
           <h1>{{ collection?.title || '收藏集' }}</h1>
-          <span v-if="collection" class="status-pill" :class="collection.status">{{ COLLECTION_STATUS_META[collection.status]?.label || collection.status }}</span>
           <span v-if="stats.completed" class="completed-badge">已制霸</span>
         </div>
         <p class="page-subtitle description">{{ collection?.description || '还没有描述。' }}</p>
         <p v-if="collection" class="meta-line">
-          <span v-if="collection.started_on">开始 {{ collection.started_on }}</span>
-          <span v-if="collection.target_on">目标 {{ collection.target_on }}</span>
           <span>更新 {{ formatShortDate(collection.updated_at) }}</span>
         </p>
       </div>
@@ -301,7 +261,6 @@ watch(() => props.collectionId, loadAll, { immediate: true })
 
       <section v-if="selected.length" class="action-bar">
         <span>已选 {{ selected.length }} 项</span>
-        <button v-if="selectedMissing.length" class="chip-button" type="button" :disabled="busy" @click="ownSelected">登记 {{ selectedMissing.length }} 台</button>
         <button class="chip-button danger" type="button" :disabled="busy" @click="removeSelected">移出收藏集</button>
       </section>
 
@@ -312,7 +271,6 @@ watch(() => props.collectionId, loadAll, { immediate: true })
           <span>产品</span>
           <span>状态</span>
           <span>备注</span>
-          <span class="action-col">操作</span>
         </div>
         <div v-for="item in items" :key="item.id" class="item-row" :class="{ picked: selectedSet.has(item.id) }">
           <span class="check"><input type="checkbox" :checked="selectedSet.has(item.id)" @change="toggle(item.id)" /></span>
@@ -325,10 +283,6 @@ watch(() => props.collectionId, loadAll, { immediate: true })
             <small>{{ stateText(item) }}</small>
           </div>
           <input class="note-input" :value="item.note || ''" placeholder="备注" maxlength="200" @change="saveNote(item, $event)" />
-          <div class="action-col">
-            <button v-if="!item.owned" class="chip-button" type="button" :disabled="busy" @click="own(item)">登记一台</button>
-            <span v-else class="owned-label">已拥有</span>
-          </div>
         </div>
       </div>
       <div v-else class="state-panel">
@@ -358,11 +312,6 @@ watch(() => props.collectionId, loadAll, { immediate: true })
 .description { max-width: 760px; white-space: pre-wrap; }
 .meta-line { display: flex; flex-wrap: wrap; gap: 14px; margin: 8px 0 0; color: #87938f; font-size: 12px; }
 .header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.status-pill { display: inline-block; padding: 3px 9px; font-size: 11px; border-radius: 999px; border: 1px solid #dfe6e1; }
-.status-pill.planning { color: #4f5f8a; background: #eef3fb; border-color: #d3dff0; }
-.status-pill.active { color: #1f5b4c; background: #e8f3ee; border-color: #c9e2d7; }
-.status-pill.paused { color: #8a5f18; background: #fdf6e7; border-color: #f0dfb8; }
-.status-pill.abandoned { color: #8a8f8c; background: #f3f3f1; border-color: #e2e2df; }
 .completed-badge { padding: 3px 9px; color: #7a5312; font-size: 11px; font-weight: 600; background: #fdf3d9; border: 1px solid #ecd39b; border-radius: 999px; }
 .progress-panel { padding: 20px; margin-bottom: 18px; background: #fafbf8; border: 1px solid #d9e1dc; border-radius: 8px; }
 .progress-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
@@ -384,7 +333,7 @@ watch(() => props.collectionId, loadAll, { immediate: true })
 .chip-button:hover { background: #f4f8f5; }
 .chip-button.danger { color: #a4402c; border-color: #eccabf; }
 .item-table { overflow: auto; background: #fff; border: 1px solid #d9e1dc; border-radius: 8px; }
-.item-head, .item-row { display: grid; grid-template-columns: 34px minmax(220px, 1.4fr) 180px minmax(140px, 1fr) 104px; gap: 10px; align-items: center; min-width: 760px; padding: 10px 12px; }
+.item-head, .item-row { display: grid; grid-template-columns: 34px minmax(220px, 1.4fr) 180px minmax(160px, 1fr); gap: 10px; align-items: center; min-width: 700px; padding: 10px 12px; }
 .item-head { color: #6b7774; font-size: 12px; background: #fafbf8; border-bottom: 1px solid #e3e9e4; }
 .item-row { color: #2c3b36; font-size: 13px; border-bottom: 1px solid #eff2ef; }
 .item-row:last-child { border-bottom: 0; }
@@ -403,8 +352,6 @@ watch(() => props.collectionId, loadAll, { immediate: true })
 .note-input { width: 100%; padding: 5px 7px; color: #2f554c; font-size: 12px; background: transparent; border: 1px solid transparent; border-radius: 4px; }
 .note-input:hover { border-color: #dbe7e0; }
 .note-input:focus { background: #fff; border-color: #24705f; outline: none; }
-.action-col { display: flex; justify-content: flex-end; }
-.owned-label { color: #87938f; font-size: 11px; }
 .small { min-height: 120px; }
 .collection-message { position: fixed; right: 28px; bottom: 28px; z-index: 60; padding: 10px 14px; color: #1f4a3c; font-size: 13px; background: #e8f5ec; border: 1px solid #b9d9c4; border-radius: 7px; box-shadow: 0 8px 24px #17352a1f; }
 .collection-message.is-error { color: #8d3423; background: #fdeee9; border-color: #efc6ba; }

@@ -1,6 +1,8 @@
 # 收藏集：人定范围 + 资产进度
 
-> 已实现（2026-10-28）。最终口径：**产品级、只收录已录入的产品、不做占位、不做规则/候选、不设难度字段**。
+> 已实现（2026-10-28）；2026-11-04 简化：**去掉 `status`、`started_on`、`target_on`**，只保留名字、描述和清单。
+>
+> 最终口径：**产品级、只收录已录入的产品、不做占位、不做规则/候选、不设难度字段**。
 >
 > 基于库内数据：2243 个产品、139 台 pending 资产、84 个厂商、875 条审核记录。资产 pending 流量来源见 [deploy-and-restore.md](deploy-and-restore.md)。
 
@@ -12,8 +14,9 @@
 4. **拥有 = 该产品至少有一台 `state != 'sold'` 的资产；已拼 = 资产处于 `displayed / stored`，或 `built_on` 已填。**
 5. **同款多台只算一次**；曾经拥有（已售）不算拥有，只做注脚。
 6. **进度条三段**：已拼 / 已拥有未拼 / 缺口。清单只有三个筛选：**全部 / 已拥有 / 未拥有**。
-7. **“完成”是派生徽章，不是 `status`。** `status` 只表达意图：构想 / 进行中 / 暂缓 / 放弃。
+7. **“完成”是派生徽章**：`total > 0 && owned == total` 时显示；没有状态字段。
 8. **不设难度字段**：难度、注意事项都写在 `description` 里。不做规则、候选、愿望单。
+9. **不设状态与日期**：收藏集不表达“构想/进行中/暂缓/放弃”，也不记开始/目标日期；`created_at` / `updated_at` 只做系统记录。
 
 ---
 
@@ -44,7 +47,7 @@
 collection_targets(collection_name, catalog_item_id, decision, priority, reason, rule_version)
 ```
 
-它没有收藏集实体、没有描述/状态/时间，`decision` 还把“想收/已拥有”混在一起。新设计拆成：**实体（collections）+ 目标（items）+ 派生进度（assets）**。
+它没有收藏集实体，也没有描述，`decision` 还把“想收/已拥有”混在一起。新设计拆成：**实体（collections）+ 目标（items）+ 派生进度（assets）**。
 
 ---
 
@@ -53,7 +56,7 @@ collection_targets(collection_name, catalog_item_id, decision, priority, reason,
 ```text
 collections 1 ─── n collection_items n ─── 1 products 1 ─── n assets
      │                    │                                  │
-   意图/描述/状态        目标（必须是已录入产品）             现实（拥有/已拼/已售）
+   名字/描述              目标（必须是已录入产品）             现实（拥有/已拼/已售）
      └────────────────────── 进度 = 读时连接 ──────────────────┘
 ```
 
@@ -70,7 +73,7 @@ collections 1 ─── n collection_items n ─── 1 products 1 ─── n 
 - **资产不挂 `collection_id`。** 一台 RG 夏亚扎古同时属于“RG 扎古全制霸”和“夏亚全制霸”；资产属于现实，不属于某个计划。
 - **目标挂产品，不挂资产。** 目标是“要收哪一款”，资产是“已经有了几台”。同款两台不产生两个目标。
 - **一个产品可以同时属于多个收藏集。**
-- **收藏集不是标签。** 标签适合横向标记；收藏集还需要描述、状态、未完成目标、进度，标签撑不住。
+- **收藏集不是标签。** 标签适合横向标记；收藏集还需要描述、未完成目标、进度，标签撑不住。
 
 ---
 
@@ -140,7 +143,7 @@ v1 采用**产品级**：一个目标 = 一个具体产品（含版本/配色）
 - **多台不加分。** 同款买三台，`owned` 还是 1，`extra_copies` 是 2。
 - **已售不算拥有。** 默认进度是“现在手里有没有”，不是“曾经有没有”。`sold_only` 只显示“另有 N 款已售出”。
 - **没有 0/0 = 100%。** `total = 0` 时显示“未定义范围”。
-- **完成是派生的**，不写 `status`；卖出一台后进度掉下来，徽章自动消失。
+- **完成是派生的**，不写字段；卖出一台后进度掉下来，徽章自动消失。
 - **没有同步任务**：资产新建、状态变化、删除都会在下一次读取时反映；收藏集不缓存进度。
 
 ### 4.2 清单的三个筛选
@@ -205,13 +208,8 @@ CREATE TABLE collections (
     id              uuid PRIMARY KEY,
     title           varchar(160) NOT NULL UNIQUE,
     description     text,
-    status          varchar(16) NOT NULL DEFAULT 'active',
-    started_on      date,
-    target_on       date,
     created_at      timestamptz NOT NULL DEFAULT now(),
-    updated_at      timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT ck_collections_status
-        CHECK (status IN ('planning', 'active', 'paused', 'abandoned'))
+    updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE collection_items (
@@ -223,12 +221,11 @@ CREATE TABLE collection_items (
     CONSTRAINT uq_collection_items_product UNIQUE (collection_id, product_id)
 );
 
-CREATE INDEX ix_collections_status ON collections(status);
 CREATE INDEX ix_collection_items_collection_id ON collection_items(collection_id);
 CREATE INDEX ix_collection_items_product_id ON collection_items(product_id);
 ```
 
-迁移 `0021_collections`，`down_revision = '0020_tag_retirement'`。
+建表迁移 `0021_collections`；`0029_simplify_collections` 删除 `status`、`started_on`、`target_on`、`ck_collections_status` 和 `ix_collections_status`。
 
 ### 5.2 `collections`
 
@@ -237,9 +234,6 @@ CREATE INDEX ix_collection_items_product_id ON collection_items(product_id);
 | `id` | UUID 主键 | 不对外暴露 |
 | `title` | 收藏集名称 | 必填，唯一，去首尾空格 |
 | `description` | 描述：为什么收、收哪些、难度和注意事项 | 纯文本，保留换行；难度也写这里 |
-| `status` | `planning / active / paused / abandoned` | 只表达人的意图，不表示完成 |
-| `started_on` | 人定义的开始日期 | 业务事实，可和 `created_at` 不同 |
-| `target_on` | 期望完成日期 | 可空 |
 | `created_at` | 建档时间 | 系统事实 |
 | `updated_at` | 最近一次改动 | 加/删目标、改描述时由服务层触碰 |
 
@@ -257,6 +251,7 @@ CREATE INDEX ix_collection_items_product_id ON collection_items(product_id);
 
 ### 5.4 为什么没有这些字段/表
 
+- **没有 `status` / `started_on` / `target_on`**：完成由资产派生，开始/目标日期没有人维护；收藏集只回答“收哪些、收齐没有”。
 - **没有 `display_name` / `expected_code` / `product_id` 可空**：不占位，目标只能是已录入产品。
 - **没有 `difficulty` / `difficulty_note`**：难度是描述的一部分；不做一个可排序但没人维护的枚举。
 - **没有 `scope_filter`**：范围就是 `collection_items` 里那些行，再存一份筛选条件等于给范围造第二个事实来源。
@@ -274,10 +269,10 @@ CREATE INDEX ix_collection_items_product_id ON collection_items(product_id);
 
 | 方法 | 路径 | 作用 |
 | --- | --- | --- |
-| `GET` | `/collections` | 列表 + 每个集合的统计；支持 `status`、`q`、`limit` |
-| `POST` | `/collections` | 新建 |
+| `GET` | `/collections` | 列表 + 每个集合的统计；支持 `q`、`limit` |
+| `POST` | `/collections` | 新建（标题 + 描述） |
 | `GET` | `/collections/{id}` | 详情 + 统计 |
-| `PATCH` | `/collections/{id}` | 改标题/描述/状态/日期 |
+| `PATCH` | `/collections/{id}` | 改标题/描述 |
 | `DELETE` | `/collections/{id}` | 删集合（级联目标；不动产品/资产） |
 | `GET` | `/collections/{id}/items` | 目标列表；`state=all/owned/missing`、`q`、分页 |
 | `POST` | `/collections/{id}/items` | 加一个已录入产品 |
@@ -299,9 +294,6 @@ CREATE INDEX ix_collection_items_product_id ON collection_items(product_id);
     "id": "6f1c...",
     "title": "RG 扎古全制霸",
     "description": "万代 RG 的扎古系，只收通贩。难度：两款长期不再版。",
-    "status": "active",
-    "started_on": "2026-01-01",
-    "target_on": null,
     "created_at": "2026-10-28T10:00:00+08:00",
     "updated_at": "2026-10-28T10:00:00+08:00",
     "stats": {
@@ -383,7 +375,7 @@ CREATE INDEX ix_collection_items_product_id ON collection_items(product_id);
 | 产品不存在 | 404 | 产品不存在 |
 | 标题重复 | 409 | 已存在同名收藏集 |
 | 单条加目标，产品已在清单 | 409 | 该产品已在此收藏集中 |
-| 标题为空 / status 非法 | 422 | 具体字段错误 |
+| 标题为空 | 422 | 具体字段错误 |
 | 批量里有未知产品 | 404 | 产品不存在：… |
 | 单次批量超过 500 | 422 | 单次最多 500 条 |
 
@@ -395,23 +387,9 @@ CREATE INDEX ix_collection_items_product_id ON collection_items(product_id);
 - 条目响应的 `asset_count` 是**未售台数**，`sold_count` 是已售台数，`asset_states` 只列未售资产的状态。
 - 排序：收藏集列表按 `updated_at` 倒序；目标列表按系列 → 编号 → 名称。
 
-### 6.4 与资产页的闭环
+### 6.4 与资产页的边界
 
-不新增“标记完成”接口。收藏集里的“登记一台”就是一次普通的：
-
-```http
-POST /api/v1/assets
-{ "product_id": "b2...", "state": "pending" }
-```
-
-批量登记复用：
-
-```http
-POST /api/v1/assets/bulk
-{ "product_ids": ["b2...", "b3..."], "state": "pending" }
-```
-
-资产建好后，收藏集重新读详情，进度自然变化。只有一个事实来源。
+收藏集**只读进度，不创建资产**：页面上没有“登记一台 / 批量登记”，不调用 `POST /assets` 或 `POST /assets/bulk`。资产统一在“我的资产”页新增，收藏集在下次读取时自然反映新的 `owned / built`。只有一个事实来源，也只有一个写入口。
 
 ---
 
@@ -429,10 +407,10 @@ POST /api/v1/assets/bulk
 
 ```text
 ┌ 收藏集 ──────────────────────────────────────────────── [+ 新建收藏集] ┐
-│ 进行中 3    已制霸 1    目标 186    已拥有 92                         │
+│ 收藏集 3    已制霸 1    目标 186    已拥有 92                          │
 ├────────────────────────────────────────────────────────────────────────┤
 │ ┌────────────────────────────┐  ┌────────────────────────────┐        │
-│ │ RG 扎古全制霸        进行中 │  │ 高高制霸            进行中 │        │
+│ │ RG 扎古全制霸              │  │ 高高制霸                    │        │
 │ │ 万代 RG 的扎古系，只收通贩 │  │ 302 款，慢慢收             │        │
 │ │ 2 / 3               66.7% │  │ 41 / 302            13.6% │        │
 │ │ ████████████░░░░░░░░░░░░░ │  │ ██░░░░░░░░░░░░░░░░░░░░░░ │        │
@@ -442,10 +420,11 @@ POST /api/v1/assets/bulk
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-- 卡片：标题 → 状态 → 描述（两行截断）→ 进度条 → 数字 → 更新/目标日期。
+- 卡片：标题 → 描述（两行截断）→ 进度条 → 数字 → 更新日期。
 - `stats.completed` 为真时挂一个金色“已制霸”小徽章。
 - 空列表：`Trophy` 图标 + “还没有收藏集。先建一个，再把想要的产品加进来。”
-- 筛选：状态、搜索；排序：最近更新 / 进度 / 名称。
+- 筛选：搜索；排序：**最近更新 / 进度最慢 / 进度最快**，默认最近更新；视图：**网格 / 列表**可切换。
+- **最近更新只看收藏集自身变动**（名称、描述、目标增删、目标备注），资产状态变化不会刷新 `updated_at`。
 - 没有难度圆点。
 
 ### 7.3 收藏集详情
@@ -454,7 +433,7 @@ POST /api/v1/assets/bulk
 ← 收藏集
 RG 扎古全制霸                                      [编辑] [删除]
 万代 RG 的扎古系，只收通贩。难度：两款长期不再版。
-进行中 · 2026-01-01 开始 · 更新 10-28
+更新 10-28
 
 ┌ 制霸进度 ──────────────────────────────────────────────────────┐
 │ 2 / 3                                                  66.7%  │
@@ -466,20 +445,19 @@ RG 扎古全制霸                                      [编辑] [删除]
 [全部 3]  [已拥有 2]  [未拥有 1]              搜索...  [+ 添加目标]
 ┌────────────────────────────────────────────────────────────────┐
 │ ☐ MS-06S 夏亚专用扎古II   RG 02  万代·RG   已拼·展示           │
-│ ☐ MS-06F 量产型扎古II     RG 04  万代·RG   已拥有·待拼 [登记]  │
-│ ☐ MS-06R-2 强尼莱登...    RG 26  万代·RG   缺口        [登记]  │
+│ ☐ MS-06F 量产型扎古II     RG 04  万代·RG   已拥有·待拼         │
+│ ☐ MS-06R-2 强尼莱登...    RG 26  万代·RG   缺口                │
 └────────────────────────────────────────────────────────────────┘
 ```
 
-行内动作：
+行内显示（没有写操作）：
 
 - **已拥有**：显示资产状态（待拼/收藏/展示/收纳）和台数。
-- **缺口**：显示“登记一台”，创建 `pending` 资产。
+- **缺口**：只显示状态，不提供“登记一台”；新增资产请到“我的资产”页。
 - **备注**：行内输入，失焦保存；只写计划，不写实物。
 - **移除**：勾选后批量移出，只动清单。
-- **批量登记**：勾选多个缺口，一次 `POST /assets/bulk`。
 
-没有“未入库”行、没有“候选补充”tab、没有难度。
+没有“未入库”行、没有“候选补充”tab、没有难度，也没有登记入口。
 
 ### 7.4 进度条组件
 
@@ -497,7 +475,7 @@ props: built, owned, total, height?
 
 ### 7.5 新建/编辑收藏集
 
-表单字段：标题、状态、开始日期、目标日期、描述。
+表单字段：标题、描述。
 
 - 标题必填，重复 409 时提示。
 - **难度不单独填**；写在描述里。
@@ -516,9 +494,8 @@ props: built, owned, total, height?
 ### 7.7 与产品目录/资产页的联动
 
 - **产品抽屉**：显示“所属收藏”chips；点击跳转收藏集。
-- **快速登记**：收藏集行内“登记一台” → `POST /assets` → toast 显示资产码 → 重新读收藏集。
-- **批量登记**：缺口多选 → `POST /assets/bulk`。
-- **资产页**：不反向显示收藏集，保持资产页只回答“我有什么”。
+- **收藏集**：只读进度，不提供新增资产入口；要登记实物，去“我的资产”页。
+- **资产页**：新增/卖出资产后，收藏集下次读取自然变化；资产页不反向显示收藏集，保持“我有什么”的单一职责。
 
 ### 7.8 命名冲突
 
@@ -537,7 +514,9 @@ props: built, owned, total, height?
 | 两张表 | 三张表（加进度表） | 进度可派生，存了会漂移；当前规模读时算足够快 |
 | 目标挂产品 | 目标挂资产 | 同款多台只算一个目标；资产可以换手、卖出 |
 | 资产不挂收藏集 | `assets.collection_id` | 一台可以同时属于多个收藏集 |
-| 完成派生 | `status='completed'` | 卖出后进度应掉下来；状态只表达意图 |
+| 收藏集只读进度 | 行内“登记一台” | 资产写入口统一在资产页；收藏集只回答“收哪些、收齐没有” |
+| 完成派生 | 存 `completed` 字段 | 卖出后进度应掉下来；不必手工维护 |
+| 只存名字+描述 | `status` / 开始/目标日期 | 没有人为维护；收藏集只回答“收哪些、收齐没有” |
 | 不做难度字段 | `difficulty` + `difficulty_note` | 难度是描述的一部分；避免一个没人维护的枚举 |
 | 三个筛选 | 未拼/未入库/已售 | 用户明确只看全部/已拥有/未拥有；其余在行内状态里表达 |
 | 产品级粒度 | 机体级 | 先简单；分组以后再说 |
@@ -552,18 +531,18 @@ props: built, owned, total, height?
 
 ### 9.1 已落地
 
-- 迁移 `0021_collections`
+- 迁移 `0021_collections`；`0029_simplify_collections` 删除状态与日期
 - `models.py`：`Collection` / `CollectionItem`
 - `schemas.py`：收藏集、目标、统计、批量
 - `services/collections.py`：范围、统计、批量、反查
 - `api/collections.py`；`api/products.py` 增加所属收藏
 - `frontend`：`CollectionsView` / `CollectionDetail` / `CollectionDialog` / `CollectionItemDialog` / `CollectionProgress`
-- `tests/test_collections.py`；后端 31 tests 通过
+- `tests/test_collections.py`；后端全部测试通过
 
 ### 9.2 验收场景
 
 1. 新建“RG 扎古全制霸”，加入 3 个产品 → `0 / 3`，进度条全灰，缺口 3。
-2. 给 RG 02 登记一台（`pending`）→ `1 / 3`，浅绿 1 格。
+2. 在“我的资产”页给 RG 02 登记一台（`pending`）→ 收藏集 `1 / 3`，浅绿 1 格。
 3. 把 RG 02 改成 `displayed` → `1 / 3`，深绿 1 格，`built=1`。
 4. 再加一台 RG 02 → 进度不变，`extra_copies=1`。
 5. 把 RG 02 卖出 → `0 / 3`，`sold_only=1`，进度条回灰。
@@ -609,6 +588,7 @@ props: built, owned, total, height?
 ```text
 backend/
   alembic/versions/0021_collections.py
+  alembic/versions/0029_simplify_collections.py
   app/models.py                 # Collection / CollectionItem
   app/schemas.py                # Collection* / CollectionItem*
   app/services/collections.py   # 范围与统计
@@ -619,7 +599,7 @@ backend/
   tests/conftest.py             # 防污染表加 collections / collection_items
 frontend/src/
   App.vue                       # 路由 + 页面切换
-  collectionMeta.js             # 状态标签/日期格式
+  collectionMeta.js             # 日期格式
   components/SidebarNav.vue     # 侧栏入口
   components/CollectionsView.vue
   components/CollectionDetail.vue
