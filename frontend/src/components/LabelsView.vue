@@ -86,6 +86,39 @@ function print() {
   window.location.hash = 'print'
 }
 
+// The label printer is a Windows USB device; the web app runs in Docker, so the
+// page talks to printer-sdk/printer_bridge.py on the host (127.0.0.1:17801).
+const BRIDGE = 'http://127.0.0.1:17801'
+const printing = ref(false)
+
+async function printDirect() {
+  if (!selected.value.length || printing.value) return
+  const chosen = queue.value.filter((tag) => selectedSet.value.has(tag.id))
+  printing.value = true
+  try {
+    const response = await fetch(`${BRIDGE}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: chosen }),
+    })
+    const body = await response.json().catch(() => null)
+    if (!response.ok) throw new Error(body?.detail || `标签机返回 ${response.status}`)
+    await fetch('/api/v1/tags/bulk/printed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag_ids: chosen.map((tag) => tag.id) }),
+    })
+    flash(`已发送到标签机：${body.printed} 张`)
+    selected.value = []
+    await loadQueue()
+  } catch (exc) {
+    flash(`标签机没连上（${exc.message}），已改用浏览器打印`, true)
+    print()
+  } finally {
+    printing.value = false
+  }
+}
+
 onMounted(loadQueue)
 </script>
 
@@ -99,7 +132,8 @@ onMounted(loadQueue)
       </div>
       <div class="header-actions">
         <button class="secondary-button" type="button" :disabled="loading" @click="loadQueue"><RefreshCw :size="16" />刷新</button>
-        <button class="primary-button" type="button" :disabled="!selected.length" @click="print"><Printer :size="17" />打印所选（{{ selected.length }}）</button>
+        <button class="secondary-button" type="button" :disabled="!selected.length" @click="print"><Printer :size="17" />浏览器打印</button>
+        <button class="primary-button" type="button" :disabled="!selected.length || printing" @click="printDirect"><Printer :size="17" />打印所选（{{ selected.length }}）</button>
       </div>
     </header>
 
