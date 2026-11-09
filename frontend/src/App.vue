@@ -424,7 +424,7 @@ function flash(text, isError = false) {
 
 async function loadAssets() {
   try {
-    const response = await fetch('/api/v1/assets?limit=500')
+    const response = await fetch('/api/v1/assets?limit=5000')
     if (response.ok) assets.value = await response.json()
   } catch {
     /* 卡片上的“已入”只是提示，失败不阻塞目录 */

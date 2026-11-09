@@ -33,13 +33,15 @@ def create_asset(payload: AssetCreate, session: Session = Depends(get_session)) 
 def list_assets(
     state: str | None = None,
     q: str | None = None,
-    limit: int = Query(default=100, le=500),
+    limit: int = Query(default=100, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ) -> list[Asset]:
     statement = (
         select(Asset)
         .options(selectinload(Asset.product), selectinload(Asset.tags))
         .order_by(Asset.created_at.desc(), Asset.code)
+        .offset(offset)
         .limit(limit)
     )
     if state and state != "all":

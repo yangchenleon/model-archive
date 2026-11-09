@@ -1,8 +1,11 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { Boxes, LoaderCircle, Plus, Printer, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Boxes, ChevronRight, LoaderCircle, Plus, Printer, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 import AssetDialog from './AssetDialog.vue'
 import AssetAddDialog from './AssetAddDialog.vue'
+import PaginationBar from './PaginationBar.vue'
+
+const PAGE_SIZE = 50
 
 const STATE_META = {
   pending: { label: '待拼', hint: '买了没动' },
@@ -27,6 +30,7 @@ const message = ref('')
 const messageError = ref(false)
 const detail = ref(null)
 const addOpen = ref(false)
+const page = ref(1)
 
 const counts = computed(() => {
   const base = { all: assets.value.length }
@@ -47,7 +51,18 @@ const filtered = computed(() => {
 
 const selectedSet = computed(() => new Set(selected.value))
 const selectedAssets = computed(() => assets.value.filter((asset) => selectedSet.value.has(asset.id)))
-const allChecked = computed(() => filtered.value.length > 0 && filtered.value.every((a) => selectedSet.value.has(a.id)))
+
+const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / PAGE_SIZE)))
+const pagedAssets = computed(() => {
+  const start = (page.value - 1) * PAGE_SIZE
+  return filtered.value.slice(start, start + PAGE_SIZE)
+})
+// The header checkbox covers only the rows on the current page.
+const allChecked = computed(() => pagedAssets.value.length > 0 && pagedAssets.value.every((a) => selectedSet.value.has(a.id)))
+watch([search, stateFilter], () => { page.value = 1 })
+watch(pageCount, (count) => {
+  if (page.value > count) page.value = count
+})
 
 // A bulk move is offered only when every selected asset is either already in
 // that state or may legally move there. `sold` therefore appears for any mix of
@@ -82,7 +97,7 @@ async function loadAssets() {
   loading.value = true
   error.value = ''
   try {
-    assets.value = await api('/api/v1/assets?limit=500')
+    assets.value = await api('/api/v1/assets?limit=5000')
   } catch (exc) {
     error.value = `资产读取失败：${exc.message}`
   } finally {
@@ -100,6 +115,48 @@ async function jumpToCode() {
   }
 }
 
+// -- 袋（tags）展开、加袋、删袋 -------------------------------------------------
+const expandedIds = ref([])
+const expandedSet = computed(() => new Set(expandedIds.value))
+
+function toggleExpand(id) {
+  const index = expandedIds.value.indexOf(id)
+  if (index >= 0) expandedIds.value.splice(index, 1)
+  else expandedIds.value.push(id)
+}
+
+async function addBag(asset) {
+  const input = window.prompt('袋名（同名袋会复用同一张标签，两个本体请改名）', '本体')
+  if (input === null) return
+  const title = input.trim() || '本体'
+  try {
+    const tag = await api(`/api/v1/assets/${asset.id}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    })
+    asset.tags = asset.tags || []
+    const index = asset.tags.findIndex((item) => item.id === tag.id)
+    const reused = index >= 0
+    if (reused) asset.tags[index] = tag
+    else asset.tags.push(tag)
+    flash(reused ? `「${title}」复用原标签 ${tag.code}，已回到待打印队列` : `已新建袋「${title}」：${tag.code}`)
+    expandedIds.value.includes(asset.id) || expandedIds.value.push(asset.id)
+  } catch (exc) {
+    flash(exc.message, true)
+  }
+}
+
+async function removeBag(asset, tag) {
+  if (!window.confirm(`删除袋「${tag.title}」（${tag.code}）？这张标签随之作废。`)) return
+  try {
+    await api(`/api/v1/tags/${tag.id}`, { method: 'DELETE' })
+    asset.tags = (asset.tags || []).filter((item) => item.id !== tag.id)
+    flash(`已删除 ${tag.code}`)
+  } catch (exc) {
+    flash(exc.message, true)
+  }
+}
+
 function toggleAsset(id) {
   const index = selected.value.indexOf(id)
   if (index >= 0) selected.value.splice(index, 1)
@@ -107,7 +164,11 @@ function toggleAsset(id) {
 }
 
 function toggleAll() {
-  selected.value = allChecked.value ? [] : filtered.value.map((asset) => asset.id)
+  // page-scoped: the header checkbox only covers the rows currently visible
+  const ids = pagedAssets.value.map((asset) => asset.id)
+  selected.value = allChecked.value
+    ? selected.value.filter((id) => !ids.includes(id))
+    : [...new Set([...selected.value, ...ids])]
 }
 
 async function bulkState(state) {
@@ -221,10 +282,12 @@ onMounted(loadAssets)
 
     <p v-if="loading" class="state-panel"><LoaderCircle class="spin" :size="24" />正在读取资产…</p>
     <p v-else-if="error" class="state-panel error-state">{{ error }}</p>
-    <div v-else-if="filtered.length" class="asset-table-wrap">
+    <template v-else-if="filtered.length">
+    <div class="asset-table-wrap">
       <table class="asset-table">
         <thead>
           <tr>
+            <th class="expand"></th>
             <th class="check"><input type="checkbox" :checked="allChecked" @change="toggleAll" /></th>
             <th>编号</th>
             <th>产品</th>
@@ -235,7 +298,13 @@ onMounted(loadAssets)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="asset in filtered" :key="asset.id" :class="{ picked: selectedSet.has(asset.id) }">
+          <template v-for="asset in pagedAssets" :key="asset.id">
+          <tr :class="{ picked: selectedSet.has(asset.id) }">
+            <td class="expand" @click.stop="toggleExpand(asset.id)">
+              <button class="expand-button" type="button" :aria-expanded="expandedSet.has(asset.id)" :title="expandedSet.has(asset.id) ? '收起袋' : '展开袋'">
+                <ChevronRight :size="15" :class="{ open: expandedSet.has(asset.id) }" />
+              </button>
+            </td>
             <td class="check" @click.stop><input type="checkbox" :checked="selectedSet.has(asset.id)" @change="toggleAsset(asset.id)" /></td>
             <td class="code" @click="detail = asset">{{ asset.code }}</td>
             <td class="name" @click="detail = asset">
@@ -247,9 +316,27 @@ onMounted(loadAssets)
             <td class="num" @click="detail = asset">{{ asset.rating ? '★'.repeat(asset.rating) : '—' }}</td>
             <td class="num" @click="detail = asset">{{ asset.purchase_price ?? '—' }}</td>
           </tr>
+          <tr v-if="expandedSet.has(asset.id)" class="bags-row">
+            <td colspan="8">
+              <div class="bags">
+                <span class="bags-label">袋 {{ (asset.tags || []).length }} 个</span>
+                <span v-for="tag in asset.tags" :key="tag.id" class="bag" :class="{ retired: tag.retired_at, pending: !tag.printed_at }">
+                  <strong>{{ tag.title }}</strong>
+                  <code>{{ tag.code }}</code>
+                  <small>{{ tag.retired_at ? '已作废' : (tag.printed_at ? '已打印' : '待打印') }}</small>
+                  <button class="bag-remove" type="button" title="删除这个袋" @click.stop="removeBag(asset, tag)"><Trash2 :size="12" /></button>
+                </span>
+                <span v-if="!(asset.tags || []).length" class="bags-empty">还没有袋</span>
+                <button class="bag-add" type="button" :disabled="asset.state === 'sold'" @click.stop="addBag(asset)"><Plus :size="13" />加一袋</button>
+              </div>
+            </td>
+          </tr>
+          </template>
         </tbody>
       </table>
     </div>
+    <PaginationBar :page="page" :page-count="pageCount" :total="filtered.length" @update:page="page = $event" />
+    </template>
     <div v-else class="state-panel">
       <Boxes :size="26" />
       <p>{{ assets.length ? '没有符合条件的资产。' : '还没有资产。点右上角「添加资产」从产品库里选。' }}</p>
@@ -282,6 +369,26 @@ onMounted(loadAssets)
 .asset-table tbody tr:hover { background: #f7faf7; }
 .asset-table tbody tr.picked { background: #eef6f2; }
 .asset-table .check { width: 34px; cursor: default; }
+.asset-table .expand { width: 26px; padding-right: 0; cursor: default; }
+.expand-button { display: grid; width: 20px; height: 20px; padding: 0; color: #6b7774; background: transparent; border: 0; border-radius: 4px; place-items: center; cursor: pointer; }
+.expand-button:hover { background: #eef6f2; color: #24574d; }
+.expand-button svg { transition: transform .15s ease; }
+.expand-button svg.open { transform: rotate(90deg); }
+.bags-row td { padding: 6px 12px 12px 50px; background: #fbfdfb; border-bottom: 1px solid #e6ece7; cursor: default; }
+.bags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bags-label { color: #87938f; font-size: 12px; }
+.bag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 9px; font-size: 12px; background: #fff; border: 1px solid #d7e2db; border-radius: 999px; }
+.bag strong { font-weight: 600; color: #2c3b36; }
+.bag code { color: #1f332c; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.bag small { color: #6d7b77; }
+.bag.pending { border-color: #ecd9a8; background: #fdf9ee; }
+.bag.retired { opacity: .55; border-style: dashed; }
+.bag-remove { display: grid; width: 18px; height: 18px; padding: 0; color: #a4402c; background: transparent; border: 0; border-radius: 50%; place-items: center; cursor: pointer; }
+.bag-remove:hover { background: #fdeee9; }
+.bag-add { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; color: #2f554c; font-size: 12px; background: #fff; border: 1px dashed #cbd7d2; border-radius: 999px; cursor: pointer; }
+.bag-add:hover:not(:disabled) { background: #f4f8f5; }
+.bag-add:disabled { color: #a8b2ae; cursor: not-allowed; }
+.bags-empty { color: #9aa5a1; font-size: 12px; }
 .asset-table .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #1f332c; white-space: nowrap; }
 .asset-table .name { display: grid; gap: 2px; }
 .asset-table .name strong { font-weight: 600; }

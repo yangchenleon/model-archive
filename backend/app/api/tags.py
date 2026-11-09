@@ -37,8 +37,15 @@ def bulk_queue_tags(payload: BulkTagCreate, session: Session = Depends(get_sessi
 
 @router.post("/assets/{asset_id}/tags", response_model=TagRead, status_code=status.HTTP_201_CREATED)
 def add_tag(asset_id: UUID, payload: TagCreate, session: Session = Depends(get_session)) -> AssetTag:
-    """Add one more bag; the next free seq picks the code suffix."""
+    """Add one more bag. An existing bag with the same name keeps its code."""
     return service.issue(session, asset_id, payload.title)
+
+
+@router.delete("/tags/{tag_id}")
+def delete_tag(tag_id: UUID, session: Session = Depends(get_session)) -> dict[str, str]:
+    """Drop a bag row that should never have existed (misclick cleanup)."""
+    service.delete(session, tag_id)
+    return {"deleted": str(tag_id)}
 
 
 @router.patch("/tags/{tag_id}", response_model=TagRead)

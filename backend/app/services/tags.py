@@ -38,17 +38,48 @@ def _require_tag(session: Session, tag_id: UUID) -> AssetTag:
 
 
 def issue(session: Session, asset_id: UUID, title: str | None) -> AssetTag:
-    """Add one more bag to an asset; the next free seq picks the suffix."""
+    """Add a bag, or re-use the sticker that already carries this bag name.
+
+    A bag is identified by (asset, title): printing "本体" again is the same
+    bag, so it keeps its code and simply goes back into the print queue.
+    Two bags with the same name therefore cannot get two different IDs; give
+    them different names (本体 / 本体2) when the asset really has two.
+    """
     value = clean_title(title)
     asset = assets_service.load(session, asset_id)
     if asset.state == "sold":
         raise Conflict("已卖出的资产不能加标签")
+
+    existing = session.scalar(
+        select(AssetTag)
+        .where(
+            AssetTag.asset_id == asset.id,
+            AssetTag.title == value,
+            AssetTag.retired_at.is_(None),
+        )
+        .order_by(AssetTag.seq)
+        .limit(1)
+    )
+    if existing is not None:
+        existing.printed_at = None
+        session.commit()
+        session.refresh(existing)
+        return existing
+
     last_seq = session.scalar(select(func.max(AssetTag.seq)).where(AssetTag.asset_id == asset.id)) or 0
     seq = last_seq + 1
     tag = AssetTag(asset_id=asset.id, seq=seq, code=codes.issue(session, 1)[0], title=value)
     session.add(tag)
     session.commit()
     session.refresh(tag)
+    return tag
+
+
+def delete(session: Session, tag_id: UUID) -> AssetTag:
+    """Remove one bag row (a misclicked 加一袋 leaves a bag that never existed)."""
+    tag = _require_tag(session, tag_id)
+    session.delete(tag)
+    session.commit()
     return tag
 
 
