@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-model_archive}
       POSTGRES_USER: ${POSTGRES_USER:-model_archive}
@@ -16,12 +17,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
   adminer:
     image: adminer:4.8.1-standalone
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "127.0.0.1:${ADMINER_PORT:-18080}:8080"
   api:
+    restart: unless-stopped
     build:
       context: ./backend
     environment:
@@ -39,6 +42,7 @@ services:
       - ./backend/alembic:/app/alembic
       - ./backend/alembic.ini:/app/alembic.ini
   frontend:
+    restart: unless-stopped
     build:
       context: ./frontend
     environment:
