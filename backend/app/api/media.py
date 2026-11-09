@@ -39,7 +39,9 @@ def media(video_id: str, date: str | None = None) -> FileResponse:
 @router.get("/qr")
 def qr(data: str, scale: int = Query(default=8, le=20)) -> Response:
     """Standalone SVG so the print page needs no font bundling and no client lib."""
-    symbol = segno.make(data, error="m")
+    # micro=False: segno would otherwise pick a 13x13 Micro QR for the 5-char
+    # tag codes, which most phone scanners cannot read.
+    symbol = segno.make(data, error="m", micro=False)
     buffer = io.BytesIO()
     # An <img src> needs the xmlns declaration that segno's inline output omits.
     symbol.save(buffer, kind="svg", scale=scale, border=2)
