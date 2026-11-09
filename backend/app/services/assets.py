@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Asset, AssetStateChange, AssetTag, Product
@@ -67,6 +67,21 @@ def load(session: Session, asset_id: UUID) -> Asset:
     if asset is None:
         raise NotFound("资产不存在")
     return asset
+
+
+def stats(session: Session) -> dict[str, int]:
+    """Authoritative per-state counts for the whole collection.
+
+    The inventory page only loads a window of rows, so counting that window
+    under-reports as the collection grows (it used to cap at whatever ``limit``
+    the list had). The overview cards read these totals instead.
+    """
+    rows = session.execute(select(Asset.state, func.count()).group_by(Asset.state)).all()
+    counts = {state: 0 for state in ASSET_STATES}
+    for state, count in rows:
+        if state in counts:
+            counts[state] = int(count)
+    return {**counts, "total": sum(counts.values())}
 
 
 def _require_product(session: Session, product_id: UUID) -> Product:

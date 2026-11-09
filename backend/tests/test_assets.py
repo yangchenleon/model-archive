@@ -39,6 +39,22 @@ def test_asset_gets_a_random_code_and_an_audit_row(client, product):
     assert [(c["from_state"], c["to_state"]) for c in changes] == [(None, "stored")]
 
 
+def test_stats_reports_totals_not_a_loaded_window(client, product):
+    """Overview cards must not depend on how many rows one page fetched."""
+    states = ("pending", "keep", "displayed", "stored", "sold")
+    before = client.get("/api/v1/assets/stats").json()
+    assert set(states + ("total",)) <= set(before)
+    assert before["total"] == sum(before[state] for state in states)
+
+    make_asset(client, product, state="pending")
+    make_asset(client, product, state="keep")
+
+    after = client.get("/api/v1/assets/stats").json()
+    assert after["pending"] == before["pending"] + 1
+    assert after["keep"] == before["keep"] + 1
+    assert after["total"] == before["total"] + 2
+
+
 def test_state_change_is_audited_and_invalid_state_rejected(client, product):
     asset = make_asset(client, product)
 

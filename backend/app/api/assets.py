@@ -54,6 +54,16 @@ def list_assets(
     return list(session.scalars(statement))
 
 
+@router.get("/assets/stats")
+def asset_stats(session: Session = Depends(get_session)) -> dict[str, int]:
+    """Whole-collection totals per state.
+
+    Declared before ``/assets/{asset_id}`` so ``stats`` is not read as a UUID;
+    the inventory cards need totals, not the page of rows the list returns.
+    """
+    return service.stats(session)
+
+
 @router.post("/assets/bulk", response_model=list[AssetRead], status_code=status.HTTP_201_CREATED)
 def bulk_create_assets(payload: BulkAssetCreate, session: Session = Depends(get_session)) -> list[Asset]:
     """Backlog entry: register N products at once, each with an initial state."""

@@ -20,6 +20,7 @@ const STATE_ORDER = ['pending', 'keep', 'displayed', 'stored', 'sold']
 const ACTION_ORDER = ['displayed', 'stored', 'pending', 'keep', 'sold']
 
 const assets = ref([])
+const stats = ref({})
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
@@ -32,10 +33,14 @@ const detail = ref(null)
 const addOpen = ref(false)
 const page = ref(1)
 
+// Counts come from the server: this page only holds a window of rows, so
+// counting them would cap the cards at that window (that is why the overview
+// silently stopped at 500). The loaded rows are only a fallback.
 const counts = computed(() => {
-  const base = { all: assets.value.length }
-  for (const state of STATE_ORDER) base[state] = 0
-  for (const asset of assets.value) base[asset.state] = (base[asset.state] || 0) + 1
+  const base = { all: stats.value.total ?? assets.value.length }
+  for (const state of STATE_ORDER) {
+    base[state] = stats.value[state] ?? assets.value.filter((asset) => asset.state === state).length
+  }
   return base
 })
 
@@ -93,11 +98,20 @@ async function api(path, options = {}) {
   return body
 }
 
+async function loadStats() {
+  try {
+    stats.value = await api('/api/v1/assets/stats')
+  } catch {
+    /* the cards fall back to the rows that did load */
+  }
+}
+
 async function loadAssets() {
   loading.value = true
   error.value = ''
   try {
-    assets.value = await api('/api/v1/assets?limit=5000')
+    const [rows] = await Promise.all([api('/api/v1/assets?limit=5000'), loadStats()])
+    assets.value = rows
   } catch (exc) {
     error.value = `资产读取失败：${exc.message}`
   } finally {
@@ -228,11 +242,13 @@ function onSaved(updated) {
   const index = assets.value.findIndex((item) => item.id === updated.id)
   if (index >= 0) assets.value[index] = updated
   detail.value = updated
+  loadStats()
 }
 
 function onRemoved(id) {
   assets.value = assets.value.filter((item) => item.id !== id)
   selected.value = selected.value.filter((value) => value !== id)
+  loadStats()
 }
 
 function onCreated(result) {
