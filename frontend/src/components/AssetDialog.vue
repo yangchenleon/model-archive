@@ -57,11 +57,6 @@ watch(() => props.asset?.id, async (id) => {
   form.value = {
     acquired_on: props.asset.acquired_on || '',
     purchase_price: props.asset.purchase_price ?? '',
-    built_on: props.asset.built_on || '',
-    rating: props.asset.rating || 0,
-    review: props.asset.review || '',
-    sold_on: props.asset.sold_on || '',
-    sold_price: props.asset.sold_price ?? '',
     note: props.asset.note || '',
   }
   try {
@@ -75,11 +70,6 @@ function payload() {
   return {
     acquired_on: form.value.acquired_on || null,
     purchase_price: form.value.purchase_price === '' ? null : String(form.value.purchase_price),
-    built_on: form.value.built_on || null,
-    rating: form.value.rating || null,
-    review: form.value.review.trim() || null,
-    sold_on: form.value.sold_on || null,
-    sold_price: form.value.sold_price === '' ? null : String(form.value.sold_price),
     note: form.value.note.trim() || null,
   }
 }
@@ -174,16 +164,11 @@ async function remove() {
         </div>
 
         <section class="field-section">
-          <h3>买卖与拼装</h3>
+          <h3>买入与备注</h3>
           <div class="field-grid">
             <label><span>买入日期</span><input v-model="form.acquired_on" type="date" /></label>
             <label><span>买入价</span><input v-model="form.purchase_price" inputmode="decimal" placeholder="买入价" /></label>
-            <label><span>拼装日期</span><input v-model="form.built_on" type="date" /></label>
-            <label><span>评分</span><select v-model.number="form.rating"><option :value="0">未评分</option><option v-for="n in 5" :key="n" :value="n">{{ '★'.repeat(n) }}</option></select></label>
-            <label class="full"><span>评价</span><textarea v-model="form.review" rows="2" placeholder="关节松紧、分色、补色难度…"></textarea></label>
-            <label><span>卖出日期</span><input v-model="form.sold_on" type="date" /></label>
-            <label><span>卖出价</span><input v-model="form.sold_price" inputmode="decimal" /></label>
-            <label class="full"><span>备注</span><textarea v-model="form.note" rows="2"></textarea></label>
+            <label class="full"><span>备注</span><textarea v-model="form.note" rows="2" placeholder="在哪买的、缺件、关节松紧…"></textarea></label>
           </div>
           <div class="save-row"><button class="primary-button" type="button" :disabled="busy" @click="save"><Save :size="16" />保存</button></div>
         </section>

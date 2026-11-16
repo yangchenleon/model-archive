@@ -312,11 +312,6 @@ class AssetUpdate(BaseModel):
     state: str | None = None
     acquired_on: date | None = None
     purchase_price: Decimal | None = None
-    built_on: date | None = None
-    rating: int | None = Field(default=None, ge=1, le=5)
-    review: str | None = None
-    sold_on: date | None = None
-    sold_price: Decimal | None = None
     note: str | None = None
 
 
@@ -331,11 +326,6 @@ class AssetRead(BaseModel):
     note: str | None = None
     acquired_on: date | None = None
     purchase_price: Decimal | None = None
-    built_on: date | None = None
-    rating: int | None = None
-    review: str | None = None
-    sold_on: date | None = None
-    sold_price: Decimal | None = None
     created_at: datetime
     product: ProductBrief | None = None
     tags: list[TagRead] = []

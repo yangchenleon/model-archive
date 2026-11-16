@@ -171,7 +171,6 @@ class Asset(Base):
         CheckConstraint(
             "state IN ('pending', 'keep', 'displayed', 'stored', 'sold')", name="ck_assets_state"
         ),
-        CheckConstraint("rating IS NULL OR rating BETWEEN 1 AND 5", name="ck_assets_rating"),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     product_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("products.id", ondelete="RESTRICT"), index=True)
@@ -181,11 +180,6 @@ class Asset(Base):
     note: Mapped[str | None] = mapped_column(Text)
     acquired_on: Mapped[date | None] = mapped_column(Date)
     purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    built_on: Mapped[date | None] = mapped_column(Date)
-    rating: Mapped[int | None] = mapped_column(SmallInteger)
-    review: Mapped[str | None] = mapped_column(Text)
-    sold_on: Mapped[date | None] = mapped_column(Date)
-    sold_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     product: Mapped[Product] = relationship(back_populates="assets")
     tags: Mapped[list[AssetTag]] = relationship(back_populates="asset", cascade="all, delete-orphan")

@@ -86,18 +86,19 @@ def _rollup_assets(session: Session, product_ids: set[UUID]) -> dict[UUID, Asset
     if not product_ids:
         return {}
     rows = session.execute(
-        select(Asset.product_id, Asset.state, Asset.built_on)
+        select(Asset.product_id, Asset.state)
         .where(Asset.product_id.in_(product_ids))
         .order_by(Asset.product_id, Asset.created_at)
     ).all()
     rolls: dict[UUID, AssetRollup] = {}
-    for product_id, state, built_on in rows:
+    for product_id, state in rows:
         roll = rolls.setdefault(product_id, AssetRollup())
         if state == "sold":
             roll.sold += 1
             continue
         roll.owned += 1
-        if state in ("displayed", "stored") or built_on is not None:
+        # 已拼 = 状态本身就是已拼；只有 state 一个口径，不再看 built_on。
+        if state in ("displayed", "stored"):
             roll.built += 1
         if state not in roll.states:
             roll.states.append(state)

@@ -308,8 +308,6 @@ onMounted(loadAssets)
             <th>编号</th>
             <th>产品</th>
             <th>状态</th>
-            <th>拼装</th>
-            <th class="num">评分</th>
             <th class="num">买入</th>
           </tr>
         </thead>
@@ -328,12 +326,10 @@ onMounted(loadAssets)
               <small>{{ [asset.product?.manufacturer, asset.product?.product_line].filter(Boolean).join(' · ') }}</small>
             </td>
             <td @click="detail = asset"><span class="state-pill" :class="asset.state">{{ STATE_META[asset.state]?.label || asset.state }}</span></td>
-            <td class="date" @click="detail = asset">{{ asset.built_on || '—' }}</td>
-            <td class="num" @click="detail = asset">{{ asset.rating ? '★'.repeat(asset.rating) : '—' }}</td>
             <td class="num" @click="detail = asset">{{ asset.purchase_price ?? '—' }}</td>
           </tr>
           <tr v-if="expandedSet.has(asset.id)" class="bags-row">
-            <td colspan="8">
+            <td colspan="6">
               <div class="bags">
                 <span class="bags-label">袋 {{ (asset.tags || []).length }} 个</span>
                 <span v-for="tag in asset.tags" :key="tag.id" class="bag" :class="{ retired: tag.retired_at, pending: !tag.printed_at }">

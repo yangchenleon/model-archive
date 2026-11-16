@@ -21,6 +21,8 @@ const search = ref('')
 const state = ref('pending')
 const picked = ref([])
 const busy = ref(false)
+// 买入日期默认今天：它是唯一记录「何时进库」的事实，预填一格就能让它真的被记下来。
+const acquiredOn = ref(new Date().toLocaleDateString('sv'))
 
 const filtered = computed(() => {
   const term = search.value.trim().toLowerCase()
@@ -38,6 +40,7 @@ watch(() => props.open, async (open) => {
   if (!open) return
   picked.value = []
   search.value = ''
+  acquiredOn.value = new Date().toLocaleDateString('sv')
   if (products.value.length) return
   loading.value = true
   error.value = ''
@@ -65,7 +68,7 @@ async function submit() {
     const response = await fetch('/api/v1/assets/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_ids: picked.value, state: state.value }),
+      body: JSON.stringify({ product_ids: picked.value, state: state.value, acquired_on: acquiredOn.value || null }),
     })
     const body = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(body.detail || `请求失败 (${response.status})`)
@@ -99,6 +102,9 @@ async function submit() {
               <option v-for="option in STATE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
             </select>
           </label>
+          <label class="select-field date-field">
+            <input v-model="acquiredOn" type="date" aria-label="买入日期" title="买入日期（默认今天）" />
+          </label>
         </div>
 
         <p v-if="loading" class="pick-state"><LoaderCircle class="spin" :size="18" />读取产品目录…</p>
@@ -130,6 +136,7 @@ async function submit() {
 .hint { margin: 6px 0 0; color: #71807c; font-size: 12px; }
 .pick-toolbar { display: flex; gap: 9px; margin: 18px 0 12px; }
 .state-field { flex: 0 0 220px; }
+.date-field { flex: 0 0 150px; }
 .pick-list { max-height: 44vh; margin: 0; padding: 0; overflow: auto; list-style: none; border: 1px solid #e2e8e4; border-radius: 6px; }
 .pick-list li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 12px; font-size: 13px; color: #2b3a35; border-bottom: 1px solid #eff2ef; cursor: pointer; }
 .pick-list li:last-child { border-bottom: 0; }
