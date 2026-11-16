@@ -8,6 +8,15 @@ __pycache__/
 .mypy_cache/
 # Scratch files and throwaway downloads from ad-hoc tooling.
 .tmp/
+# 临时脚本与抓取页面一律进 .tmp/（probes/ = 一次性试探脚本，raw/ · src/ = 78dm 页面快照）。
+# 根目录不再放脚本：正式流水线在 tools/，这里只是本地草稿，永不入库。
+/*.py
+/*.json
+/*.txt
+# Agent 的本地状态与会话记录。
+/.pi/
+# 本地工作约定（路径、端口、个人习惯）；如需版本化用 git add -f AGENTS.md。
+/AGENTS.md
 # Local 78dm cookies; never commit them.
 78cookie*
 # Local database dumps are not versioned.
