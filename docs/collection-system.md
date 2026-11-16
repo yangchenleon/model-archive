@@ -4,14 +4,15 @@
 >
 > 最终口径：**产品级、只收录已录入的产品、不做占位、不做规则/候选、不设难度字段**。
 >
-> 基于库内数据：2243 个产品、139 台 pending 资产、84 个厂商、875 条审核记录。资产 pending 流量来源见 [deploy-and-restore.md](deploy-and-restore.md)。
+> 基于库内数据：见下方“快照”表，口径固定、数字带日期。资产 pending 流量来源见 [deploy-and-restore.md](deploy-and-restore.md)。
 
 ## 结论先行
 
 1. **收藏集 = 名字 + 描述 + 一张目标清单。清单就是范围，范围就是清单。**
 2. **两张表**：`collections`（收藏集）+ `collection_items`（一个目标一行）。进度不落库，从 `assets` 派生。
 3. **一个目标 = 一个已录入的产品**。不占位：目标缺口等产品表补录后再加入。
-4. **拥有 = 该产品至少有一台 `state != 'sold'` 的资产；已拼 = 资产处于 `displayed / stored`，或 `built_on` 已填。**
+4. **拥有 = 该产品至少有一台 `state != 'sold'` 的资产；已拼 = 资产处于 `displayed / stored`。**
+   （`0030` 删了 `built_on`：已拼只看状态，没有第二个口径。）
 5. **同款多台只算一次**；曾经拥有（已售）不算拥有，只做注脚。
 6. **进度条三段**：已拼 / 已拥有未拼 / 缺口。清单只有三个筛选：**全部 / 已拥有 / 未拥有**。
 7. **“完成”是派生徽章**：`total > 0 && owned == total` 时显示；没有状态字段。
@@ -24,20 +25,24 @@
 
 | 指标 | 数量 | 说明 |
 | --- | ---: | --- |
-| 产品 | 2243 | 一个产品 = 厂商 + 模型名（版本/配色在名称括号里） |
-| 厂商 | 84 | `manufacturers` 表；已合并同厂异写，不做别名表 |
-| 万代 | 1034 | MG 794 / MGEX 8 / RG 232 |
-| 系列 `MG` | 794 | 含通贩/PB/限定/活动；配件也在内 |
-| 名称含“扎古” | 72 | 跨厂商、跨比例 |
-| 名称含“夏亚” | 15 | 不含沙扎比、百式、夜莺等夏亚机体 |
-| 资产 | 139 pending | 不是 0；当前有外部 pending 写入，来源见 deploy 注意 |
+| 产品 | 2462 | 一个产品 = 厂商 + 模型名（版本/配色在名称括号里） |
+| 厂商 | 92 | `manufacturers` 表；已合并同厂异写，不做别名表 |
+| 系列 | 199 | 产品挂在 `product_line_id` 为空的有 12 条（未知系列） |
+| 万代 | 1038 | MG 794 / MGEX 8 / RG 236 |
+| 系列 `MG` | 867 | 跨厂商合计（万代 794）；含通贩/PB/限定/活动，配件也在内 |
+| 名称含“扎古” | 160 | 跨厂商、跨比例 |
+| 名称含“夏亚” | 42 | 不含沙扎比、百式、夜莺等夏亚机体 |
+| 资产 | 779（pending 427） | pending 不是 0；写入来源见 deploy 注意 |
+| 审核记录 | 875 | `review_items`；只是视频来源的收件箱，见 [ingestion-sources.md](ingestion-sources.md) |
+
+> 快照时间 2026-11-05。**这份表的数字会过期**，以口径为准：需要重新取数时直接查库，不要把旧数字当结论。
 
 这组数字说明：目录既混杂又不完整。
 
 - `product_line_id` 指向厂家自己的系列；`RG` 在多个厂家各是一条，不能当成全局唯一系列。
 - 厂名已经规范化，但同一个“扎古/夏亚”仍会跨系列、跨比例。
 - “夏亚全制霸”这种语义集合，靠名称关键词一定会漏。
-- 万代现在有 MG 794、MGEX 8、RG 232；目录已不再是单一 RG 43 款。
+- 万代现在有 MG 794、MGEX 8、RG 236；目录已不是单一 RG 43 款。
 
 因此：**范围只能由人一条条给，系统不猜。** 只给已经录入的产品；目录里没有的目标，等补录后再加。
 
@@ -130,7 +135,7 @@ v1 采用**产品级**：一个目标 = 一个具体产品（含版本/配色）
 | --- | --- |
 | `total` | 目标行数 |
 | `owned` | 目标产品存在至少一台 `state != 'sold'` 的资产 |
-| `built` | 目标产品存在未售资产，满足 `state in ('displayed','stored')` 或 `built_on IS NOT NULL` |
+| `built` | 目标产品存在未售资产且 `state in ('displayed','stored')` |
 | `unbuilt` | `owned - built`（已拥有但还没拼/留盒） |
 | `missing` | `total - owned` |
 | `sold_only` | 有已售资产、但没有任何未售资产的目标数（`missing` 的子集，只做注脚） |
@@ -165,8 +170,7 @@ WITH item AS (
                  WHERE a.product_id = i.product_id AND a.state <> 'sold') AS owned,
          EXISTS (SELECT 1 FROM assets a
                  WHERE a.product_id = i.product_id
-                   AND a.state <> 'sold'
-                   AND (a.state IN ('displayed','stored') OR a.built_on IS NOT NULL)) AS built,
+                   AND a.state IN ('displayed','stored')) AS built,
          EXISTS (SELECT 1 FROM assets a
                  WHERE a.product_id = i.product_id AND a.state = 'sold') AS sold
   FROM collection_items i
