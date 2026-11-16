@@ -16,7 +16,7 @@ import TaxonomyAdmin from './components/TaxonomyAdmin.vue'
 import PaginationBar from './components/PaginationBar.vue'
 import { CHANNEL_OPTIONS, categoryLabel, categoryOrder, channelLabel, appearanceLabel, fetchManufacturers } from './taxonomy'
 
-const SECTIONS = ['directory', 'review', 'admin', 'taxonomy', 'inventory', 'collections', 'labels', 'print', 'wishlist', 'activity']
+const SECTIONS = ['directory', 'review', 'admin', 'taxonomy', 'inventory', 'collections', 'labels', 'print']
 const activeSection = ref('directory')
 const collectionId = ref('')
 const directoryMaker = ref('')
@@ -77,13 +77,14 @@ const makerFilter = ref('')
 const view = ref('grid')
 const addDialogOpen = ref(false)
 const reviewPending = ref(0)
+const reviewLater = ref(0)
 const assets = ref([])
 const toast = ref('')
 const toastError = ref(false)
 const makerSearch = ref('')
 const makerSort = ref('taxonomy')
 const categoryFilter = ref('')
-const productSort = ref('code')
+const productSort = ref('release_date')
 
 function makerName(product) {
   return product.manufacturer || '未标注厂商'
@@ -92,7 +93,13 @@ function makerName(product) {
 async function loadReviewPending() {
   try {
     const response = await fetch('/api/v1/review/stats')
-    if (response.ok) reviewPending.value = (await response.json()).pending
+    if (response.ok) {
+      const data = await response.json()
+      reviewPending.value = data.pending
+      // 「暂缓」是真正的积压：它不在待审里，但也没结案。badge 必须把它算进去，
+      // 否则侧栏一直显示 0，没人会回去看那 500 多条。
+      reviewLater.value = data.later
+    }
   } catch {
     /* badge is best-effort */
   }
@@ -351,7 +358,7 @@ const filteredProducts = computed(() => {
         if (!dateA && !dateB) return 0
         if (!dateA) return 1
         if (!dateB) return -1
-        return dateA.localeCompare(dateB)
+        return dateB.localeCompare(dateA)
       }
 
       if (productSort.value === 'name') {
@@ -471,7 +478,7 @@ onMounted(() => {
 <template>
   <PrintView v-if="activeSection === 'print'" />
   <div v-else class="app-shell">
-    <SidebarNav :active="activeSection" :total="products.length" :pending="reviewPending" @change="navigate" />
+    <SidebarNav :active="activeSection" :total="products.length" :pending="reviewPending" :later="reviewLater" @change="navigate" />
 
     <main class="content">
       <section v-if="activeSection === 'directory'" class="directory-view">
@@ -492,7 +499,6 @@ onMounted(() => {
             <div class="metric"><span>厂牌</span><strong>{{ makerGroups.length }}</strong><small>按厂名归并</small></div>
             <div class="metric"><span>产品</span><strong>{{ products.length }}</strong><small>实时读取数据库</small></div>
             <div class="metric"><span>系列</span><strong>{{ productLines.length }}</strong><small>仅作厂牌内筛选</small></div>
-            <div class="metric mock-metric"><span>待补详情</span><strong>{{ products.filter((item) => !item.detail).length }}</strong><small>可作为整理队列</small></div>
           </section>
 
           <section class="toolbar" aria-label="厂牌筛选">
@@ -565,7 +571,7 @@ onMounted(() => {
             <label class="select-field"><Filter :size="16" /><select v-model="channelFilter"><option value="">所有渠道</option><option v-for="channel in productChannels" :key="channel.value" :value="channel.value">{{ channel.label }} {{ channel.count }}</option></select></label>
             <label class="select-field"><Filter :size="16" /><select v-model="workFilter"><option value="">所有作品</option><option v-for="work in productWorks" :key="work.value" :value="work.value">{{ work.label }} {{ work.count }}</option></select></label>
             <label class="select-field"><Filter :size="16" /><select v-model="appearanceFilter"><option value="">所有外观</option><option v-for="appearance in productAppearances" :key="appearance.value" :value="appearance.value">{{ appearance.label }} {{ appearance.count }}</option></select></label>
-            <label class="select-field"><Filter :size="16" /><select v-model="productSort"><option value="code">按编号</option><option value="release_date">按发售时间</option><option value="name">按名称</option></select></label>
+            <label class="select-field"><Filter :size="16" /><select v-model="productSort"><option value="release_date">按发售时间</option><option value="name">按名称</option><option value="code">按编号</option></select></label>
             <template v-if="!selectedMaker">
               <label class="select-field"><Building2 :size="16" /><select v-model="makerFilter"><option value="">所有厂商</option><option v-for="maker in makers" :key="maker" :value="maker">{{ maker }}</option></select></label>
               <label class="select-field"><Filter :size="16" /><select v-model="lineFilter"><option value="">所有系列</option><option v-for="line in productLines" :key="line" :value="line">{{ line }}</option></select></label>
@@ -608,13 +614,6 @@ onMounted(() => {
 
       <section v-else-if="activeSection === 'labels'" class="labels-section">
         <LabelsView />
-      </section>
-
-      <section v-else class="mock-view">
-        <header class="page-header"><div><p class="eyebrow">模拟模块</p><h1>{{ { inventory: '资产清点', wishlist: '愿望单', activity: '活动记录' }[activeSection] }}</h1><p class="page-subtitle">此区域暂用前端模拟数据，尚未连接数据库。</p></div></header>
-        <div v-if="false" class="mock-grid"><section class="mock-panel"><h2>收纳概览</h2><strong>48</strong><p>盒装模型 · 模拟统计</p></section><section class="mock-panel"><h2>待确认位置</h2><strong>6</strong><p>可在后续资产模块处理</p></section><section class="mock-panel wide"><h2>最近清点</h2><div class="mock-line"><span>MG 百式 Ver.2.0</span><small>书柜 B-03</small></div><div class="mock-line"><span>HG 风灵高达</span><small>展示柜 A-01</small></div></section></div>
-        <div v-else-if="activeSection === 'wishlist'" class="mock-grid"><section class="mock-panel wide"><h2>关注清单</h2><div class="mock-line"><span>RG 沙扎比 Special Coating</span><small>等待补货</small></div><div class="mock-line"><span>GK 独角兽胸像</span><small>待确认资料</small></div></section><section class="mock-panel"><h2>本月预算</h2><strong>¥ 800</strong><p>模拟数据</p></section></div>
-        <div v-else class="mock-grid"><section class="mock-panel wide"><h2>近期记录</h2><div class="mock-line"><span>导入产品目录</span><small>195 条 · 初始化测试</small></div><div class="mock-line"><span>创建资料库</span><small>系统事件 · 模拟</small></div></section></div>
       </section>
     </main>
   </div>

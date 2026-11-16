@@ -33,8 +33,28 @@ const busy = ref(false)
 const message = ref('')
 const messageError = ref(false)
 
-const sortKey = ref('product_code')
-const sortDirection = ref('asc')
+const sortKey = ref('release_date')
+const sortDirection = ref('desc')
+
+// 只读的缺口视图：统计永远对全表算，点击只是把筛选带进来。
+const GAP_EMPTY = {
+  release_date: (product) => !product.release_date,
+  release_channel: (product) => !product.release_channel,
+  product_code: (product) => !product.product_code,
+  product_line: (product) => !product.product_line_id,
+}
+const GAP_LABELS = {
+  release_date: '缺发售日期',
+  release_channel: '缺渠道',
+  product_code: '缺编号',
+  product_line: '缺系列',
+}
+const gapFilter = ref('')
+const gaps = computed(() => Object.keys(GAP_LABELS).map((key) => ({
+  key,
+  label: GAP_LABELS[key],
+  count: products.value.filter(GAP_EMPTY[key]).length,
+})))
 const selectedIds = ref(new Set())
 const bulkChannel = ref('')
 const bulkApplying = ref(false)
@@ -56,6 +76,8 @@ const filtered = computed(() => {
   let rows = manufacturerFilter.value
     ? products.value.filter((product) => product.manufacturer_id === manufacturerFilter.value)
     : products.value
+  // 缺口筛选：不做补全队列，只把「缺哪一块」变成一次点击，补录仍在行内编辑里做。
+  if (gapFilter.value) rows = rows.filter((product) => GAP_EMPTY[gapFilter.value](product))
   if (term) {
     rows = rows.filter((product) =>
       [product.kit_name, product.aliases, product.manufacturer, product.product_code, product.product_line, product.work, product.edition, appearanceLabel(product.appearance), channelLabel(product.release_channel), product.price]
@@ -77,7 +99,7 @@ const paged = computed(() => {
 })
 const allVisibleSelected = computed(() => paged.value.length > 0 && paged.value.every((product) => selectedIds.value.has(product.id)))
 
-watch([search, manufacturerFilter, sortKey, sortDirection, pageSize], () => {
+watch([search, manufacturerFilter, gapFilter, sortKey, sortDirection, pageSize], () => {
   page.value = 1
 })
 
@@ -401,6 +423,20 @@ loadProducts()
       <span class="result-count">{{ filtered.length }} 项</span>
     </section>
 
+    <section class="gap-strip" aria-label="字段缺口">
+      <span class="gap-title">{{ gapFilter ? '正在看：' : '字段缺口' }}</span>
+      <button
+        v-for="gap in gaps"
+        :key="gap.key"
+        type="button"
+        class="gap-chip"
+        :class="{ active: gapFilter === gap.key }"
+        @click="gapFilter = gapFilter === gap.key ? '' : gap.key"
+      >{{ gap.label }} <b>{{ gap.count }}</b></button>
+      <button v-if="gapFilter" class="text-button" type="button" @click="gapFilter = ''">清除</button>
+      <span class="gap-hint">点击筛选后直接点行内编辑补录；不做补全队列。</span>
+    </section>
+
     <section v-if="selectedIds.size" class="bulk-bar">
       <strong>已选 {{ selectedIds.size }} 项</strong>
       <span>批量设置渠道</span>
@@ -581,6 +617,13 @@ loadProducts()
 <style scoped>
 .header-actions { display: flex; gap: 8px; }
 .admin-toolbar { margin-bottom: 16px; }
+.gap-strip { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; padding: 9px 12px; background: #fafbf8; border: 1px solid #e2e8e4; border-radius: 7px; }
+.gap-title { color: #6c7a76; font-size: 12px; }
+.gap-chip { padding: 3px 9px; color: #52645e; font-size: 12px; background: #fff; border: 1px solid #dbe4de; border-radius: 999px; }
+.gap-chip b { color: #8a5f18; font-weight: 600; }
+.gap-chip.active { color: #fff; background: #24705f; border-color: #24705f; }
+.gap-chip.active b { color: #d8f0e5; }
+.gap-hint { margin-left: auto; color: #9aa6a1; font-size: 11px; }
 .maker-filter { flex: 0 1 210px; padding: 0 9px; }
 .maker-filter :deep(.maker-picker),
 .maker-filter :deep(input) { width: 100%; }

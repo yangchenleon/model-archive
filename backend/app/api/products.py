@@ -44,8 +44,9 @@ def list_products(
         .join(Manufacturer, Product.manufacturer_id == Manufacturer.id)
         .outerjoin(ProductLine, Product.product_line_id == ProductLine.id)
         .order_by(
-            Product.product_code.nulls_last(),
-            Product.release_date.nulls_last(),
+            # 发售时间优先：product_code 是系列内编号（官方码与人工排序号混用），
+            # 既不唯一也大量为空，拿它当主排序等于没排序。
+            Product.release_date.desc().nulls_last(),
             Product.kit_name,
         )
         .limit(limit)
