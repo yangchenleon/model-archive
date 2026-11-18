@@ -322,8 +322,19 @@ onMounted(loadAssets)
             <td class="check" @click.stop><input type="checkbox" :checked="selectedSet.has(asset.id)" @change="toggleAsset(asset.id)" /></td>
             <td class="code" @click="detail = asset">{{ asset.code }}</td>
             <td class="name" @click="detail = asset">
-              <strong>{{ asset.product?.kit_name || '—' }}</strong>
-              <small>{{ [asset.product?.manufacturer, asset.product?.product_line].filter(Boolean).join(' · ') }}</small>
+              <span class="name-cell">
+                <img
+                  v-if="asset.photos?.length"
+                  class="row-thumb"
+                  :src="asset.photos[0].thumb_url"
+                  :alt="asset.product?.kit_name || '实物图'"
+                  loading="lazy"
+                />
+                <span>
+                  <strong>{{ asset.product?.kit_name || '—' }}</strong>
+                  <small>{{ [asset.product?.manufacturer, asset.product?.product_line].filter(Boolean).join(' · ') }}</small>
+                </span>
+              </span>
             </td>
             <td @click="detail = asset"><span class="state-pill" :class="asset.state">{{ STATE_META[asset.state]?.label || asset.state }}</span></td>
             <td class="num" @click="detail = asset">{{ asset.purchase_price ?? '—' }}</td>
@@ -405,6 +416,9 @@ onMounted(loadAssets)
 .asset-table .name { display: grid; gap: 2px; }
 .asset-table .name strong { font-weight: 600; }
 .asset-table .name small { color: #87938f; font-size: 11px; }
+.name-cell { display: flex; align-items: center; gap: 9px; }
+.name-cell > span { display: grid; min-width: 0; }
+.row-thumb { flex: 0 0 auto; width: 34px; height: 34px; object-fit: cover; background: #f2f6f3; border: 1px solid #dbe4de; border-radius: 4px; }
 .asset-table .num, .asset-table .date { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .asset-table .num { text-align: right; color: #9a6a1f; }
 .state-pill { display: inline-block; padding: 2px 8px; font-size: 11px; border-radius: 999px; border: 1px solid #dfe6e1; }

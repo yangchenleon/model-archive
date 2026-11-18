@@ -23,14 +23,46 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:${ADMINER_PORT:-18080}:8080"
+  objects:
+    # Photo bytes. S3 API only, so the backend is swappable: Garage here,
+    # MinIO / SeaweedFS / R2 would be an env change (`S3_ENDPOINT_URL` + keys)
+    # and nothing in the app knows which one it is talking to.
+    build:
+      context: ./ops
+    image: model-archive-objects
+    restart: unless-stopped
+    environment:
+      S3_BUCKET: ${S3_BUCKET:-model-archive-photos}
+      # Dev credentials, same spirit as the default PostgreSQL password.
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-GK0123456789abcdef01234567}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    volumes:
+      - garage_data:/var/lib/garage
+      - ./ops/garage.toml:/etc/garage.toml:ro
+      - ./ops/garage-start.sh:/garage-start.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "/garage -c /etc/garage.toml status >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    ports:
+      - "127.0.0.1:${OBJECTS_PORT:-18333}:3900"
   api:
     restart: unless-stopped
     build:
       context: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-model_archive}:${POSTGRES_PASSWORD:-model_archive_dev}@db:5432/${POSTGRES_DB:-model_archive}
+      PHOTO_STORAGE: ${PHOTO_STORAGE:-s3}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://objects:3900}
+      S3_BUCKET: ${S3_BUCKET:-model-archive-photos}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-GK0123456789abcdef01234567}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      S3_REGION: ${S3_REGION:-garage}
     depends_on:
       db:
+        condition: service_healthy
+      objects:
         condition: service_healthy
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
@@ -57,3 +89,4 @@ services:
       - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
 volumes:
   postgres_data:
+  garage_data:

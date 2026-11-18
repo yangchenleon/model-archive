@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api import assets, collections, manufacturers, media, products, review, tags
+from app.api import assets, collections, manufacturers, media, photos, products, review, tags
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(products.router)
 api_router.include_router(review.router)
 api_router.include_router(assets.router)
 api_router.include_router(tags.router)
+api_router.include_router(photos.router)
 api_router.include_router(collections.router)
 api_router.include_router(manufacturers.router)
 api_router.include_router(media.router)

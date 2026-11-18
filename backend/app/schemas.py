@@ -315,6 +315,19 @@ class AssetUpdate(BaseModel):
     note: str | None = None
 
 
+class AssetPhotoRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    asset_id: UUID
+    # The API hands out its own URLs; the bucket layout stays internal.
+    url: str
+    thumb_url: str
+    width: int
+    height: int
+    bytes: int
+    created_at: datetime
+
+
 class AssetRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -329,6 +342,7 @@ class AssetRead(BaseModel):
     created_at: datetime
     product: ProductBrief | None = None
     tags: list[TagRead] = []
+    photos: list[AssetPhotoRead] = []
 
 
 class BulkAssetCreate(BaseModel):

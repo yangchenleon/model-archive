@@ -62,7 +62,7 @@ def load(session: Session, asset_id: UUID) -> Asset:
     asset = session.scalar(
         select(Asset)
         .where(Asset.id == asset_id)
-        .options(selectinload(Asset.product), selectinload(Asset.tags))
+        .options(selectinload(Asset.product), selectinload(Asset.tags), selectinload(Asset.photos))
     )
     if asset is None:
         raise NotFound("资产不存在")
@@ -99,7 +99,7 @@ def find_by_code(session: Session, raw: str) -> Asset:
     """
     code = codes.normalise(raw)
     asset = session.scalar(
-        select(Asset).where(Asset.code == code).options(selectinload(Asset.product), selectinload(Asset.tags))
+        select(Asset).where(Asset.code == code).options(selectinload(Asset.product), selectinload(Asset.tags), selectinload(Asset.photos))
     )
     if asset is None:
         tag = session.scalar(select(AssetTag).where(AssetTag.code == code))
@@ -124,7 +124,7 @@ def create(session: Session, payload: AssetCreate) -> Asset:
     session.add(AssetStateChange(asset_id=asset.id, from_state=None, to_state=asset.state))
     session.commit()
     session.refresh(asset)
-    _ = asset.product, asset.tags
+    _ = asset.product, asset.tags, asset.photos
     return asset
 
 
@@ -153,7 +153,7 @@ def create_many(session: Session, payload: BulkAssetCreate) -> list[Asset]:
     session.commit()
     for asset in assets:
         session.refresh(asset)
-        _ = asset.product, asset.tags
+        _ = asset.product, asset.tags, asset.photos
     return assets
 
 
@@ -173,7 +173,7 @@ def update(session: Session, asset_id: UUID, payload: AssetUpdate) -> Asset:
         setattr(asset, field, value)
     session.commit()
     session.refresh(asset)
-    _ = asset.product, asset.tags
+    _ = asset.product, asset.tags, asset.photos
     return asset
 
 

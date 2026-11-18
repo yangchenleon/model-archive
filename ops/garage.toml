@@ -1,0 +1,26 @@
+# Garage (S3-compatible object storage) — phase-1 backend for asset photos.
+#
+# Local-development config. The two secrets below are placeholders, same spirit
+# as the default PostgreSQL password in docker-compose.yml: the container is only
+# reachable on the compose network and on 127.0.0.1. Change them (and restart the
+# service) if this ever listens on a network you do not own.
+#
+# Single node, replication_factor 1: this is a personal archive, not a cluster.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr = "0.0.0.0:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "0000000000000000000000000000000000000000000000000000000000000000"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "0.0.0.0:3900"
+# Path-style addressing only; the API never hands out virtual-host URLs.
+root_domain = ".s3.garage.internal"
+
+[admin]
+api_bind_addr = "0.0.0.0:3903"
+admin_token = "model-archive-dev-admin-token"

@@ -183,6 +183,11 @@ class Asset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     product: Mapped[Product] = relationship(back_populates="assets")
     tags: Mapped[list[AssetTag]] = relationship(back_populates="asset", cascade="all, delete-orphan")
+    photos: Mapped[list[AssetPhoto]] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+        order_by="AssetPhoto.created_at, AssetPhoto.id",
+    )
     state_changes: Mapped[list[AssetStateChange]] = relationship(
         back_populates="asset", cascade="all, delete-orphan"
     )
@@ -191,6 +196,40 @@ class Asset(Base):
     def allowed_next_states(self) -> list[str]:
         """Read-only view of the state machine, so the UI never invents a move."""
         return allowed_next_states(self.state)
+
+
+class AssetPhoto(Base):
+    """One photo of one owned kit. The bytes live in object storage.
+
+    First version keeps a single photo per asset in the UI, but the table is a
+    list from day one: "front / back / box" is the obvious next request and a
+    unique index on ``asset_id`` would have to be dropped to allow it.
+    """
+
+    __tablename__ = "asset_photos"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "object_key", name="uq_asset_photos_asset_object"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), index=True
+    )
+    # Content hash, so the same file shared by two assets is stored once.
+    object_key: Mapped[str] = mapped_column(String(200), index=True)
+    thumb_key: Mapped[str] = mapped_column(String(200))
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    bytes: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    asset: Mapped[Asset] = relationship(back_populates="photos")
+
+    @property
+    def url(self) -> str:
+        return f"/api/v1/photos/{self.id}"
+
+    @property
+    def thumb_url(self) -> str:
+        return f"/api/v1/photos/{self.id}?size=thumb"
 
 
 class AssetTag(Base):

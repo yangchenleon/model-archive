@@ -7,14 +7,22 @@ the end, so the suite can hit the real PostgreSQL while the data stays clean.
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from app.db import get_session
-from app.main import app
+# Photos must not require a running object store, and must not leave objects
+# behind: the suite writes to a throwaway directory instead of S3.
+PHOTO_ROOT = tempfile.mkdtemp(prefix="model-archive-photos-")
+os.environ["PHOTO_STORAGE"] = "fs"
+os.environ["PHOTO_LOCAL_ROOT"] = PHOTO_ROOT
+
+from app.db import get_session  # noqa: E402  (after the env above is set)
+from app.main import app  # noqa: E402
 
 # The dev database is published on 15432; inside docker compose it is `db:5432`.
 DEFAULT_URL = "postgresql+psycopg://model_archive:model_archive_dev@localhost:15432/model_archive"
@@ -31,12 +39,19 @@ def engine():
 
 
 @pytest.fixture(scope="session", autouse=True)
+def cleanup_photo_root():
+    yield
+    shutil.rmtree(PHOTO_ROOT, ignore_errors=True)
+
+
+@pytest.fixture(scope="session", autouse=True)
 def no_pollution(engine):
     """Canary: the suite must not move the row counts of the dev database."""
     tables = (
         "products",
         "assets",
         "tags",
+        "asset_photos",
         "asset_state_changes",
         "collections",
         "collection_items",

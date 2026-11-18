@@ -8,9 +8,12 @@ description = "API for a personal plastic model collection archive"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.14,<2",
+  "boto3>=1.35,<2",
   "fastapi>=0.115,<1",
   "psycopg[binary]>=3.2,<4",
+  "pillow>=11,<14",
   "pydantic>=2.10,<3",
+  "python-multipart>=0.0.9,<1",
   "segno>=1.6,<2",
   "sqlalchemy>=2.0,<3",
   "uvicorn[standard]>=0.34,<1",

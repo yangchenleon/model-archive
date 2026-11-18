@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { Save, Trash2, X } from 'lucide-vue-next'
+import { Camera, LoaderCircle, Save, Trash2, X } from 'lucide-vue-next'
 
 const props = defineProps({
   asset: { type: Object, default: null },
@@ -37,6 +37,11 @@ const actions = computed(() => (asset.value?.allowed_next_states || []).map((val
   ACTION_LABELS[asset.value.state]?.[value] || STATE_META[value] || value,
 ]))
 
+// First version shows one photo per asset; the table already allows many, so
+// "front / back / box" is a UI change and not a migration.
+const photo = computed(() => (asset.value?.photos || [])[0] || null)
+const uploading = ref(false)
+
 function flash(text, isError = false) {
   message.value = text
   messageError.value = isError
@@ -72,6 +77,49 @@ function payload() {
     purchase_price: form.value.purchase_price === '' ? null : String(form.value.purchase_price),
     note: form.value.note.trim() || null,
   }
+}
+
+async function removePhoto() {
+  if (!photo.value || uploading.value) return
+  uploading.value = true
+  try {
+    const response = await fetch(`/api/v1/photos/${photo.value.id}`, { method: 'DELETE' })
+    if (!response.ok) throw new Error(`删除失败 (${response.status})`)
+    await reload()
+    flash('已删除照片')
+  } catch (exc) {
+    flash(exc.message, true)
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function onPickPhoto(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file || uploading.value) return
+  uploading.value = true
+  try {
+    const body = new FormData()
+    body.append('file', file)
+    const response = await fetch(`/api/v1/assets/${asset.value.id}/photos`, { method: 'POST', body })
+    const payload = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(payload.detail || `上传失败 (${response.status})`)
+    await reload()
+    flash('已保存照片')
+  } catch (exc) {
+    flash(exc.message, true)
+  } finally {
+    uploading.value = false
+  }
+}
+
+// The upload endpoint answers with the photo, not the asset: reload so the
+// parent keeps one authoritative copy of the row.
+async function reload() {
+  const response = await fetch(`/api/v1/assets/${asset.value.id}`)
+  if (!response.ok) throw new Error('刷新资产失败')
+  emit('saved', await response.json())
 }
 
 async function save() {
@@ -173,6 +221,29 @@ async function remove() {
           <div class="save-row"><button class="primary-button" type="button" :disabled="busy" @click="save"><Save :size="16" />保存</button></div>
         </section>
 
+        <section class="field-section">
+          <header class="section-head">
+            <h3>实物图</h3>
+            <span class="sub">手机可直接拍照；存长边 1920 原图 + 缩略图</span>
+          </header>
+          <div class="photo-row">
+            <a v-if="photo" :href="photo.url" target="_blank" rel="noreferrer" class="photo-thumb">
+              <img :src="photo.thumb_url" :alt="asset.product?.kit_name || '实物图'" loading="lazy" />
+            </a>
+            <span v-else class="photo-empty">还没有照片</span>
+            <div class="photo-actions">
+              <label class="secondary-button file-button">
+                <LoaderCircle v-if="uploading" class="spin" :size="15" />
+                <Camera v-else :size="15" />
+                {{ photo ? '换一张' : '拍照 / 选图' }}
+                <!-- capture 让手机直接开相机；桌面浏览器退化为选文件。 -->
+                <input type="file" accept="image/*" capture="environment" :disabled="uploading" @change="onPickPhoto" />
+              </label>
+              <button v-if="photo" class="text-button danger" type="button" :disabled="uploading" @click="removePhoto">删除</button>
+            </div>
+          </div>
+        </section>
+
         <section v-if="asset.state !== 'sold'" class="field-section">
           <header class="section-head">
             <h3>再加一个袋</h3>
@@ -241,4 +312,11 @@ h2 { margin: 0; font-size: 21px; line-height: 1.35; color: #1b2925; }
 .danger { color: #a4402c; }
 .asset-message { position: fixed; right: 28px; bottom: 28px; padding: 10px 14px; color: #1f4a3c; font-size: 13px; background: #e8f5ec; border: 1px solid #b9d9c4; border-radius: 7px; }
 .asset-message.is-error { color: #8d3423; background: #fdeee9; border-color: #efc6ba; }
+.photo-row { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.photo-thumb { display: block; flex: 0 0 auto; width: 96px; height: 96px; overflow: hidden; background: #f2f6f3; border: 1px solid #dbe4de; border-radius: 6px; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.photo-empty { flex: 1; padding: 30px 12px; color: #8b9793; font-size: 12px; text-align: center; background: #fafbf8; border: 1px dashed #cfd9d4; border-radius: 6px; }
+.photo-actions { display: flex; flex: 0 0 auto; flex-direction: column; gap: 6px; }
+.file-button { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.file-button input { display: none; }
 </style>
