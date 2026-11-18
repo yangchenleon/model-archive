@@ -2,6 +2,9 @@
 
 > 需要一页版流程和当前数据快照：见 [deployment-handoff.md](deployment-handoff.md)。
 
+> **2026-11-18 起备份是两条线**：`pg_dump`（文字数据）+ `garage_data` 卷（实物图对象）。
+> 只恢复 dump 的结果是「图片全部 404」，不是数据损坏。见第 10 节。
+>
 > 适用：Docker Compose + PostgreSQL 16。本文以当前导出的
 > `backups/model-archive-20261028.dump`（custom format，391 KB）为例。
 > 目标主机只需要 Docker、Compose、代码和这个 dump；不需要把源主机的数据库目录拷过去。
@@ -14,6 +17,7 @@
 | `.env` | 手工复制（scp / 密码管理器） | **不在 git 里**，含数据库密码和 ASR/LLM key |
 | 数据库 dump | scp / U 盘 / 内网传输 | `backups/model-archive-20261028.dump` |
 | 校验文件 | 随 dump 一起 | `backups/model-archive-20261028.dump.sha256` |
+| 图片对象 | scp / U 盘 | `backups/garage_data.tar.gz`（docker volume 打包，见第 10 节） |
 
 当前 dump 的内容（已在本机恢复到临时库验证）：
 
@@ -302,23 +306,44 @@ cd backend
 
 ---
 
-## 10. 以后从源主机重新导出
+## 10. 以后从源主机重新导出（两条线）
 
-源主机（本机）以后有新数据时：
+源主机（本机）以后有新数据时，**数据库和图片对象都要导**：
 
 ```bash
 cd /path/to/model-archive
 
 # 文件名按日期改，下面用 20261101 作为例子
+# ① 文字数据
 pg_dump -Fc -Z 9 --no-owner --no-acl \
   -f backups/model-archive-20261101.dump \
   "postgresql://model_archive:密码@localhost:15432/model_archive"
-
 sha256sum backups/model-archive-20261101.dump \
   > backups/model-archive-20261101.dump.sha256
 
+# ② 图片对象（Garage 的 docker volume）
+docker run --rm \
+  -v model-archive_garage_data:/data:ro \
+  -v "$PWD/backups":/backup \
+  alpine tar czf /backup/garage_data-20261101.tar.gz -C /data .
+
 pg_restore -l backups/model-archive-20261101.dump | head
+du -sh backups/garage_data-20261101.tar.gz
 ```
+
+恢复顺序**先 DB 后对象**：`asset_photos` 行里存的是对象键，先恢复对象没有坏处，
+但先恢复 DB 可以让「图片暂时 404」的窗口最短。对象恢复到卷里即可，不需要任何初始化：
+
+```bash
+docker run --rm -v model-archive_garage_data:/data \
+  -v "$PWD/backups":/backup alpine \
+  sh -c 'tar xzf /backup/garage_data-20261101.tar.gz -C /data'
+docker compose restart objects
+```
+
+- 只恢复 dump、不恢复对象时：图片全部 404，其余功能正常（资产、标签、收藏集、审核都不受影响）。
+- 反过来（有对象没 DB）只会产生孤儿对象，占用空间但不会报错。
+- `backups/` 已在 `.gitignore` 里，dump 和对象包都不会进仓库。
 
 - `backups/` 已在 `.gitignore` 里，dump 不会进仓库。
 - 文件名建议带日期，例如 `model-archive-20261101.dump`。
@@ -337,7 +362,10 @@ pg_restore -l backups/model-archive-20261101.dump | head
 | `relation "products" already exists` | 加 `--clean --if-exists`，或按第 8 节清空 volume |
 | API 起不来 | `docker compose logs -f api`，先看数据库健康检查和迁移报错 |
 | 前端能开但接口 404/502 | 确认 `api` 容器在跑，前端是通过 compose 的代理访问 `/api` |
-| 端口冲突 | 改 `.env` 的 `API_PORT` / `FRONTEND_PORT` / `ADMINER_PORT` / `POSTGRES_PORT` |
+| 端口冲突 | 改 `.env` 的 `API_PORT` / `FRONTEND_PORT` / `ADMINER_PORT` / `POSTGRES_PORT` / `OBJECTS_PORT` |
+| 上传照片报 500/502 | `docker compose ps objects` 是否为 healthy；`docker compose logs objects` 看 Garage 是否完成 layout |
+| 照片 404 但资产正常 | 只有 DB 没有对象：按第 10 节恢复 `garage_data` 卷 |
+| 删除照片后磁盘没变小 | Garage/S3 的块文件由后台 GC 回收，属正常语义，不是泄漏 |
 | 导入后数量不对 | 重跑第 5 节验证 SQL；确认导入的是正确的 dump 文件 |
 
 ---

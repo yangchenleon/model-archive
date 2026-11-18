@@ -12,6 +12,7 @@ docker compose up --build -d
 - API documentation: <http://localhost:18000/docs>
 - Database browser (Adminer): <http://localhost:18082>
 - Product archive frontend: <http://localhost:15174>
+- 手机访问：`tailscale serve --bg 15174` 后走 tailnet 的 HTTPS 地址，见 [docs/mobile-access.md](docs/mobile-access.md)
 
 > 端口全部取自 `.env`（`API_PORT` / `ADMINER_PORT` / `FRONTEND_PORT` / `POSTGRES_PORT`）。
 > 仓库内的默认值是 18000 / 18080 / 5173 / 15432，本地这份 `.env` 把 Adminer 和前端改成了 18082 / 15174。
@@ -19,16 +20,21 @@ docker compose up --build -d
 - Deploy to another host + import a database dump: [docs/deploy-and-restore.md](docs/deploy-and-restore.md)
 - One-page deployment handoff for the current dataset: [docs/deployment-handoff.md](docs/deployment-handoff.md)
 - 来源清单与入库约定（多条来源、`review_items` 的定位、事件/资讯边界）: [docs/ingestion-sources.md](docs/ingestion-sources.md)
+- 手机接入与实物图（Tailscale、对象存储、拍照路径）: [docs/mobile-access.md](docs/mobile-access.md)
 - Manufacturer directory assessment (historical): [docs/manufacturer-normalization.md](docs/manufacturer-normalization.md)
 - Manufacturer/series taxonomy (implemented): [docs/manufacturer-and-line-taxonomy.md](docs/manufacturer-and-line-taxonomy.md)
 - 78dm scraping and RG import runbook: [docs/78dm-scraping.md](docs/78dm-scraping.md)
 - namu.wiki RG reference (crawl method, data shape, mapping table): [docs/namu-wiki-rg.md](docs/namu-wiki-rg.md)
 
+Compose services: `db`, `adminer`, `api`, `frontend`, and `objects` (Garage, S3-compatible storage for asset
+photos — 127.0.0.1:18333, only the API talks to it). Photo bytes never enter PostgreSQL, so `pg_dump` stays small;
+backups are now two lines (dump + `garage_data` volume), see [docs/deploy-and-restore.md](docs/deploy-and-restore.md).
+
 Adminer connection details: system `PostgreSQL`, server `db`, and the database/user/password from `.env`.
 
 ## Frontend
 
-The Vue frontend reads the product directory through `/api/v1/products`; the directory is manufacturer-first (`/#directory` shows a manufacturer menu, then products grouped under that maker, with series as secondary chips, newest release first). Working pages sit beside the catalog: **我的资产** (`/#inventory`) records owned kits and their state, and the stickers that go on the storage bags — it is the **only** place an asset state changes; **收藏集** (`/#collections`) compares a human-defined product list against those assets; **后台管理** (`/#admin`) edits/deletes products through transactional API calls and carries the read-only 字段缺口 strip that jumps straight to the missing metadata; **厂家管理** (`/#taxonomy`) maintains manufacturer category/tier/sort and their flat series lists.
+The Vue frontend reads the product directory through `/api/v1/products`; the directory is manufacturer-first (`/#directory` shows a manufacturer menu, then products grouped under that maker, with series as secondary chips, newest release first). Working pages sit beside the catalog: **我的资产** (`/#inventory`) records owned kits and their state, the stickers that go on the storage bags, and the physical photo of each kit (phone capture → object storage) — it is the **only** place an asset state changes; **收藏集** (`/#collections`) compares a human-defined product list against those assets; **后台管理** (`/#admin`) edits/deletes products through transactional API calls and carries the read-only 字段缺口 strip that jumps straight to the missing metadata; **厂家管理** (`/#taxonomy`) maintains manufacturer category/tier/sort and their flat series lists.
 
 Sources are plural — 78dm scraping, Bilibili video extraction, web write-ups, and manual entry all land in the same `products` table. **入库审核** (`/#review`) is just the inbox for the video source and sits under the sidebar's 来源 group; it is not the main ingestion path. See [docs/ingestion-sources.md](docs/ingestion-sources.md) for every source, its write rules, and the boundary against a future news/events table. See also [docs/review-workflow.md](docs/review-workflow.md), [docs/manufacturer-and-line-taxonomy.md](docs/manufacturer-and-line-taxonomy.md), [docs/asset-and-labels.md](docs/asset-and-labels.md), and [docs/collection-system.md](docs/collection-system.md). 愿望单 and 活动记录 are not implemented — the nav entries and the mock pages were deleted rather than left as fake data.
 
@@ -51,6 +57,7 @@ npm run dev
 | `assets` | One row per owned kit: `code` (`K7M2Q`, five random Crockford Base32 chars), `state` (pending / keep / displayed / stored / sold), and the buy facts `acquired_on` / `purchase_price` / `note`. 已拼 is the `state` itself — there is no `built_on`, and no rating/review columns: 779 rows had zero values in all five, so migration `0030` dropped `built_on / rating / review / sold_on / sold_price`. A build review will be its own `asset_reviews` table when the agent-conversation feature lands. Sold time lives in `asset_state_changes`. State changes only happen on `/#inventory`. |
 | `tags` | One physical sticker per bag (`R4TB9`). Every sticker has its own random code, never reused. Selling an asset sets `retired_at`: the sticker leaves the print queues and cannot be reprinted, but the row stays as history. |
 | `asset_state_changes` | Audit of state transitions; field edits are not recorded. |
+| `asset_photos` | The photos of one owned kit: `object_key` (content hash, so the same file is stored once), `thumb_key`, `width`/`height`/`bytes`. Bytes live in object storage (S3 API, Garage by default) — never in the database. Uploading is idempotent; deleting a row removes the object only when nothing else references it. The UI shows one photo per asset in v1, but the table is a list (`asset_id + object_key` unique) so "front/back/box" is a frontend change, not a migration. See [docs/mobile-access.md](docs/mobile-access.md). |
 | `collections` | A human-defined set: title and description, nothing else. No status, no start/target dates, no difficulty column — completion is derived from assets, and difficulty belongs in the description. |
 | `collection_items` | One existing product in a collection, plus a plan note. `product_id` is required and `ON DELETE CASCADE`: there are no placeholder targets. Progress is derived from `assets`; sold rows do not count and multiple copies count once. |
 
